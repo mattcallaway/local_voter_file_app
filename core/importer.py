@@ -22,7 +22,7 @@ class Importer:
             c.execute('INSERT INTO files (filename, state, county) VALUES (?, ?, ?)', (file_path, state, county))
             file_id = c.lastrowid
 
-            sql_cols = ["first_name", "last_name", "city", "state", "zip", "age", "sex", "party", "phone", "precinct", "polling_location"]
+            sql_cols = ["first_name", "middle_name", "last_name", "suffix", "city", "state", "zip", "age", "sex", "party", "phone", "precinct", "polling_location"]
             
             with open(file_path, mode='r', encoding='utf-8-sig') as f:
                 reader = csv.DictReader(f)
@@ -59,6 +59,7 @@ class Importer:
                             elif "primary" in col_lower: t = "Primary"
                             elif "municipal" in col_lower: t = "Municipal"
                             elif "special" in col_lower: t = "Special"
+                            elif "recall" in col_lower: t = "Recall"
                             
                             y_match = re.search(r'(20\d{2}|\d{2})', col_lower)
                             year = ""
@@ -88,7 +89,9 @@ class Importer:
                     tup = (
                         file_id,
                         sql_row['first_name'],
+                        sql_row['middle_name'],
                         sql_row['last_name'],
+                        sql_row['suffix'],
                         final_address,
                         sql_row['city'],
                         sql_row['state'],
@@ -109,16 +112,16 @@ class Importer:
                     if len(rows_to_insert) >= 10000:
                         c.executemany('''
                             INSERT INTO voters 
-                            (file_id, first_name, last_name, address, city, state, zip, age, sex, party, phone, precinct, polling_location, districts, phones, voting_history, raw_data)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            (file_id, first_name, middle_name, last_name, suffix, address, city, state, zip, age, sex, party, phone, precinct, polling_location, districts, phones, voting_history, raw_data)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ''', rows_to_insert)
                         rows_to_insert.clear()
 
                 if rows_to_insert:
                     c.executemany('''
                         INSERT INTO voters 
-                        (file_id, first_name, last_name, address, city, state, zip, age, sex, party, phone, precinct, polling_location, districts, phones, voting_history, raw_data)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (file_id, first_name, middle_name, last_name, suffix, address, city, state, zip, age, sex, party, phone, precinct, polling_location, districts, phones, voting_history, raw_data)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', rows_to_insert)
 
             self.db.conn.commit()

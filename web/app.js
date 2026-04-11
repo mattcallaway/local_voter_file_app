@@ -24,7 +24,9 @@ let currentColumns = [];
 const standardFields = [
     {val: "", label: "-- Ignore / Raw Data --"},
     {val: "first_name", label: "Core: First Name"},
+    {val: "middle_name", label: "Core: Middle Name"},
     {val: "last_name", label: "Core: Last Name"},
+    {val: "suffix", label: "Core: Suffix"},
     {val: "age", label: "Core: Age"},
     {val: "sex", label: "Core: Sex / Gender"},
     {val: "party", label: "Core: Party"},
@@ -110,6 +112,7 @@ function buildMappingTable() {
             if (opt.val === 'district_SD' && (normalizeCols.includes('sd') || normalizeCols.includes('statesenate'))) option.selected = true;
             if (opt.val === 'district_HD' && (normalizeCols.includes('hd') || normalizeCols.includes('statehouse') || normalizeCols.includes('assembly'))) option.selected = true;
             if (opt.val === 'district_Supervisor' && normalizeCols.includes('supervisor')) option.selected = true;
+            if (opt.val === 'history_Election' && (normalizeCols.includes('general') || normalizeCols.includes('primary') || normalizeCols.includes('municipal') || normalizeCols.includes('special') || normalizeCols.includes('recall'))) option.selected = true;
             select.appendChild(option);
         });
         tdSelect.appendChild(select);
@@ -194,7 +197,9 @@ function performSearch() {
             tr.innerHTML = `
                 <td><input type="checkbox" class="row-select" value="${r.id}" checked></td>
                 <td>${r.first_name || ''}</td>
+                <td>${r.middle_name || ''}</td>
                 <td>${r.last_name || ''}</td>
+                <td>${r.suffix || ''}</td>
                 <td>${r.address || ''}</td>
                 <td>${r.city || ''}</td>
                 <td>${r.party || ''}</td>

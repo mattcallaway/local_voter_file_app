@@ -25,7 +25,9 @@ class Database:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 file_id INTEGER,
                 first_name TEXT,
+                middle_name TEXT,
                 last_name TEXT,
+                suffix TEXT,
                 address TEXT,
                 city TEXT,
                 state TEXT,
@@ -49,7 +51,9 @@ class Database:
             CREATE VIRTUAL TABLE IF NOT EXISTS voters_fts 
             USING fts5(
                 first_name, 
+                middle_name,
                 last_name, 
+                suffix,
                 address, 
                 city, 
                 zip, 
@@ -61,20 +65,20 @@ class Database:
         # Triggers to keep FTS table in sync
         c.executescript('''
             CREATE TRIGGER IF NOT EXISTS voters_ai AFTER INSERT ON voters BEGIN
-                INSERT INTO voters_fts(rowid, first_name, last_name, address, city, zip)
-                VALUES (new.id, new.first_name, new.last_name, new.address, new.city, new.zip);
+                INSERT INTO voters_fts(rowid, first_name, middle_name, last_name, suffix, address, city, zip)
+                VALUES (new.id, new.first_name, new.middle_name, new.last_name, new.suffix, new.address, new.city, new.zip);
             END;
             
             CREATE TRIGGER IF NOT EXISTS voters_ad AFTER DELETE ON voters BEGIN
-                INSERT INTO voters_fts(voters_fts, rowid, first_name, last_name, address, city, zip)
-                VALUES ('delete', old.id, old.first_name, old.last_name, old.address, old.city, old.zip);
+                INSERT INTO voters_fts(voters_fts, rowid, first_name, middle_name, last_name, suffix, address, city, zip)
+                VALUES ('delete', old.id, old.first_name, old.middle_name, old.last_name, old.suffix, old.address, old.city, old.zip);
             END;
             
             CREATE TRIGGER IF NOT EXISTS voters_au AFTER UPDATE ON voters BEGIN
-                INSERT INTO voters_fts(voters_fts, rowid, first_name, last_name, address, city, zip)
-                VALUES ('delete', old.id, old.first_name, old.last_name, old.address, old.city, old.zip);
-                INSERT INTO voters_fts(rowid, first_name, last_name, address, city, zip)
-                VALUES (new.id, new.first_name, new.last_name, new.address, new.city, new.zip);
+                INSERT INTO voters_fts(voters_fts, rowid, first_name, middle_name, last_name, suffix, address, city, zip)
+                VALUES ('delete', old.id, old.first_name, old.middle_name, old.last_name, old.suffix, old.address, old.city, old.zip);
+                INSERT INTO voters_fts(rowid, first_name, middle_name, last_name, suffix, address, city, zip)
+                VALUES (new.id, new.first_name, new.middle_name, new.last_name, new.suffix, new.address, new.city, new.zip);
             END;
         ''')
 
