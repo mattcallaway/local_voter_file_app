@@ -39,6 +39,7 @@ class Database:
                 districts TEXT,
                 phones TEXT,
                 voting_history TEXT,
+                custom_data TEXT,
                 raw_data TEXT,
                 FOREIGN KEY (file_id) REFERENCES files (id)
             )
@@ -84,6 +85,11 @@ class Database:
                 color TEXT
             )
         ''')
+        
+        # Initialize default tags safely
+        default_tags = ['Supporter', 'Donor', 'Volunteer', 'Elected Official']
+        for tag in default_tags:
+            c.execute('INSERT OR IGNORE INTO tags (name, color) VALUES (?, ?)', (tag, '#3182ce'))
         
         c.execute('''
             CREATE TABLE IF NOT EXISTS voter_tags (

@@ -51,9 +51,24 @@ class Importer:
                             sql_row[mapped_target] = value
                         elif mapped_target == 'address_part':
                             address_parts.append(value)
-                        elif mapped_target and mapped_target.startswith('history_'):
-                            h_key = mapped_target.replace('history_', '')
-                            sql_row['voting_history'][h_key] = value
+                        elif mapped_target == 'history_Election':
+                            import re
+                            col_lower = original_col.lower()
+                            t = "Unknown"
+                            if "general" in col_lower: t = "General"
+                            elif "primary" in col_lower: t = "Primary"
+                            elif "municipal" in col_lower: t = "Municipal"
+                            elif "special" in col_lower: t = "Special"
+                            
+                            y_match = re.search(r'(20\d{2}|\d{2})', col_lower)
+                            year = ""
+                            if y_match:
+                                y = y_match.group(1)
+                                if len(y) == 2: y = "20" + y
+                                year = y
+                                
+                            key = f"{t} {year}".strip()
+                            sql_row['voting_history'][key] = value
                         elif mapped_target and mapped_target.startswith('district_'):
                             # Can be CD, SD, HD, Supervisor, etc.
                             d_key = mapped_target.replace('district_', '')

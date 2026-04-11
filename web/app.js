@@ -41,8 +41,7 @@ const standardFields = [
     {val: "district_CensusBlock", label: "District: Census Block"},
     {val: "precinct", label: "Geography: Precinct"},
     {val: "polling_location", label: "Geography: Polling Location"},
-    {val: "history_General", label: "Voting History (General)"},
-    {val: "history_Primary", label: "Voting History (Primary)"}
+    {val: "history_Election", label: "Voting History (Dynamic Auto-Parse)"}
 ];
 
 // Initialize
@@ -162,12 +161,25 @@ let activeSearchResults = [];
 // Search
 function performSearch() {
     let query = document.getElementById('search-query').value;
+    
+    let historySelected = Array.from(document.querySelectorAll('.history-cb:checked')).map(cb => cb.value);
+    let historyMath = null;
+    if (historySelected.length > 0) {
+        historyMath = {
+            elections: historySelected,
+            threshold: parseInt(document.getElementById('filter-history-threshold').value) || 1
+        };
+    }
+
     let filters = {
         city: document.getElementById('filter-city').value,
         party: document.getElementById('filter-party').value,
         precinct: document.getElementById('filter-precinct').value,
         district_CD: document.getElementById('filter-district_CD').value,
-        district_SD: document.getElementById('filter-district_SD').value
+        district_SD: document.getElementById('filter-district_SD').value,
+        history_math: historyMath,
+        has_tag: document.getElementById('filter-tag').value,
+        in_list: document.getElementById('filter-list').value
     };
     
     window.pywebview.api.search_voters(query, filters, 100, 0).then(results => {
@@ -213,16 +225,66 @@ function saveAsList() {
 function loadLists() {
     window.pywebview.api.get_lists().then(lists => {
         let ul = document.getElementById('saved-lists');
+        let filterList = document.getElementById('filter-list');
         ul.innerHTML = '';
+        filterList.innerHTML = '<option value="">-- Any --</option>';
+
         lists.forEach(l => {
             let li = document.createElement('li');
             li.innerText = l.name;
             ul.appendChild(li);
+            filterList.innerHTML += `<option value="${l.id}">${l.name}</option>`;
         });
     });
 }
 
-// Initial load for lists
+function loadElections() {
+    window.pywebview.api.get_elections().then(els => {
+        let div = document.getElementById('election-checklist');
+        div.innerHTML = '';
+        els.forEach(el => {
+            div.innerHTML += `<div><input type="checkbox" class="history-cb" value="${el}"> ${el}</div>`;
+        });
+    });
+}
+
+function loadTags() {
+    window.pywebview.api.get_tags().then(tags => {
+        let filterSel = document.getElementById('filter-tag');
+        let bulkSel = document.getElementById('bulk-tag-selector');
+        
+        filterSel.innerHTML = '<option value="">-- Any --</option>';
+        bulkSel.innerHTML = '<option value="">-- Bulk Tag --</option>';
+        
+        tags.forEach(t => {
+            filterSel.innerHTML += `<option value="${t.id}">${t.name}</option>`;
+            bulkSel.innerHTML += `<option value="${t.id}">${t.name}</option>`;
+        });
+    });
+}
+
+function applyBulkTag() {
+    let checked = Array.from(document.querySelectorAll('.row-select:checked')).map(cb => parseInt(cb.value));
+    let tagId = document.getElementById('bulk-tag-selector').value;
+    
+    if (checked.length === 0) {
+        alert("No items selected");
+        return;
+    }
+    if (!tagId) {
+        alert("No tag selected");
+        return;
+    }
+    
+    window.pywebview.api.bulk_add_tag(checked, parseInt(tagId)).then(r => {
+        alert("Tag Applied to " + checked.length + " voters!");
+        performSearch(); // refresh visual
+    });
+}
+
+// Initial load for sidebars
 window.addEventListener('pywebviewready', function() {
     loadLists();
+    loadElections();
+    loadTags();
 });

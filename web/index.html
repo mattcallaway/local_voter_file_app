@@ -99,6 +99,22 @@
                         <input type="text" id="filter-district_SD" placeholder="e.g. 5">
                     </div>
                     
+                    <hr>
+                    <h3>Data Filters</h3>
+                    <div class="form-group">
+                        <label>Voting History</label>
+                        <div id="election-checklist" class="checkbox-list"></div>
+                        <input type="number" id="filter-history-threshold" class="full-width mt-1" placeholder="Voted in at least (e.g. 2)" min="1">
+                    </div>
+                    <div class="form-group mt-2">
+                        <label>Has Tag</label>
+                        <select id="filter-tag" class="full-width"><option value="">-- Any --</option></select>
+                    </div>
+                    <div class="form-group mt-2">
+                        <label>In List</label>
+                        <select id="filter-list" class="full-width"><option value="">-- Any --</option></select>
+                    </div>
+                    
                     <button class="btn primary full-width mt-3" onclick="performSearch()">Search</button>
                     
                     <hr>
@@ -109,9 +125,13 @@
                 </div>
                 
                 <div class="search-results card">
-                    <div class="results-header">
+                    <div class="results-header" style="flex-wrap: wrap; gap: 10px;">
                         <h3 id="results-count">Results (0)</h3>
-                        <button class="btn secondary" onclick="saveAsList()">Save as Static List</button>
+                        <div style="display: flex; gap: 5px;">
+                            <button class="btn secondary" onclick="saveAsList()">Save as Static List</button>
+                            <select id="bulk-tag-selector" style="max-width: 150px;"></select>
+                            <button class="btn secondary" onclick="applyBulkTag()">Apply Tag</button>
+                        </div>
                     </div>
                     <div class="table-container">
                         <table class="data-table">
