@@ -16,21 +16,14 @@ class Importer:
             return []
 
     def import_file(self, file_path, state, county, mapping):
-        """
-        mapping is a dict: { 'csv_header_name': 'normalized_sql_column' }
-        where normalized_sql_column is one of:
-        first_name, last_name, address, city, state, zip, age, sex, party, phone, precinct, polling_location, history_*, custom_*
-        """
         try:
             # 1. Register file
             c = self.db.conn.cursor()
             c.execute('INSERT INTO files (filename, state, county) VALUES (?, ?, ?)', (file_path, state, county))
             file_id = c.lastrowid
 
-            # Prepare to map correctly
-            sql_cols = ["first_name", "last_name", "address", "city", "state", "zip", "age", "sex", "party", "phone", "precinct", "polling_location"]
+            sql_cols = ["first_name", "last_name", "city", "state", "zip", "age", "sex", "party", "phone", "precinct", "polling_location"]
             
-            # Read and ingest
             with open(file_path, mode='r', encoding='utf-8-sig') as f:
                 reader = csv.DictReader(f)
                 
@@ -38,28 +31,50 @@ class Importer:
                 for row in reader:
                     sql_row = {col: None for col in sql_cols}
                     sql_row['voting_history'] = {}
+                    sql_row['districts'] = {}
+                    sql_row['phones'] = []
+                    address_parts = []
                     
-                    # Store entire raw row as well
                     sql_row['raw_data'] = row
                     
                     for original_col, value in row.items():
-                        if not original_col:
+                        if not original_col or not value:
                             continue
+                            
+                        value = str(value).strip()
+                        if not value:
+                            continue
+
                         mapped_target = mapping.get(original_col, None)
                         
                         if mapped_target in sql_cols:
                             sql_row[mapped_target] = value
+                        elif mapped_target == 'address_part':
+                            address_parts.append(value)
                         elif mapped_target and mapped_target.startswith('history_'):
-                            # it's a voting history column
                             h_key = mapped_target.replace('history_', '')
                             sql_row['voting_history'][h_key] = value
-                            
-                    # Prepare tuple for insertion
+                        elif mapped_target and mapped_target.startswith('district_'):
+                            # Can be CD, SD, HD, Supervisor, etc.
+                            d_key = mapped_target.replace('district_', '')
+                            sql_row['districts'][d_key] = value
+                        elif mapped_target and mapped_target.startswith('phone_'):
+                            # phone_number, phone_flag, cell_flag, etc.
+                            sql_row['phones'].append({
+                                "source_column": original_col,
+                                "value": value,
+                                "mapped_type": mapped_target
+                            })
+                            if mapped_target == 'phone_number' and not sql_row['phone']:
+                                sql_row['phone'] = value
+
+                    final_address = " ".join(address_parts)
+                    
                     tup = (
                         file_id,
                         sql_row['first_name'],
                         sql_row['last_name'],
-                        sql_row['address'],
+                        final_address,
                         sql_row['city'],
                         sql_row['state'],
                         sql_row.get('zip'),
@@ -69,26 +84,26 @@ class Importer:
                         sql_row['phone'],
                         sql_row['precinct'],
                         sql_row['polling_location'],
+                        json.dumps(sql_row['districts']),
+                        json.dumps(sql_row['phones']),
                         json.dumps(sql_row['voting_history']),
                         json.dumps(sql_row['raw_data'])
                     )
                     rows_to_insert.append(tup)
                     
-                    # chunking at 10k
                     if len(rows_to_insert) >= 10000:
                         c.executemany('''
                             INSERT INTO voters 
-                            (file_id, first_name, last_name, address, city, state, zip, age, sex, party, phone, precinct, polling_location, voting_history, raw_data)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            (file_id, first_name, last_name, address, city, state, zip, age, sex, party, phone, precinct, polling_location, districts, phones, voting_history, raw_data)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ''', rows_to_insert)
                         rows_to_insert.clear()
 
-                # any remaining
                 if rows_to_insert:
                     c.executemany('''
                         INSERT INTO voters 
-                        (file_id, first_name, last_name, address, city, state, zip, age, sex, party, phone, precinct, polling_location, voting_history, raw_data)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (file_id, first_name, last_name, address, city, state, zip, age, sex, party, phone, precinct, polling_location, districts, phones, voting_history, raw_data)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', rows_to_insert)
 
             self.db.conn.commit()
@@ -98,4 +113,5 @@ class Importer:
             import traceback
             traceback.print_exc()
             return {"status": "error", "message": str(e)}
+
 

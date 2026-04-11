@@ -36,6 +36,8 @@ class Database:
                 phone TEXT,
                 precinct TEXT,
                 polling_location TEXT,
+                districts TEXT,
+                phones TEXT,
                 voting_history TEXT,
                 raw_data TEXT,
                 FOREIGN KEY (file_id) REFERENCES files (id)

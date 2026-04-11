@@ -45,9 +45,13 @@ class AppAPI:
         if filters:
             for k, v in filters.items():
                 if v and v.strip() != "":
-                    conditions.append(f"v.{k} LIKE ?")
-                    # wildcard around it
-                    args.append(f"%{v}%")
+                    if k.startswith('district_'):
+                        d_key = k.replace('district_', '')
+                        conditions.append(f"json_extract(v.districts, '$.{d_key}') LIKE ?")
+                        args.append(f"%{v}%")
+                    else:
+                        conditions.append(f"v.{k} LIKE ?")
+                        args.append(f"%{v}%")
 
         if conditions:
             base_sql += " WHERE " + " AND ".join(conditions)

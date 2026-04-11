@@ -23,18 +23,24 @@ let currentCsvFile = null;
 let currentColumns = [];
 const standardFields = [
     {val: "", label: "-- Ignore / Raw Data --"},
-    {val: "first_name", label: "First Name"},
-    {val: "last_name", label: "Last Name"},
-    {val: "address", label: "Address"},
-    {val: "city", label: "City"},
-    {val: "state", label: "State"},
-    {val: "zip", label: "Zip Code"},
-    {val: "age", label: "Age"},
-    {val: "sex", label: "Sex / Gender"},
-    {val: "party", label: "Party"},
-    {val: "phone", label: "Phone"},
-    {val: "precinct", label: "Precinct"},
-    {val: "polling_location", label: "Polling Location"},
+    {val: "first_name", label: "Core: First Name"},
+    {val: "last_name", label: "Core: Last Name"},
+    {val: "age", label: "Core: Age"},
+    {val: "sex", label: "Core: Sex / Gender"},
+    {val: "party", label: "Core: Party"},
+    {val: "address_part", label: "Address: Street/Line (Combines)"},
+    {val: "city", label: "Address: City"},
+    {val: "state", label: "Address: State"},
+    {val: "zip", label: "Address: Zip Code"},
+    {val: "phone_number", label: "Phone: Phone Number"},
+    {val: "phone_flag", label: "Phone: Flag (e.g. IsCell)"},
+    {val: "district_CD", label: "District: Congressional (CD)"},
+    {val: "district_SD", label: "District: State Senate (SD)"},
+    {val: "district_HD", label: "District: State House (HD)"},
+    {val: "district_Supervisor", label: "District: Supervisor"},
+    {val: "district_CensusBlock", label: "District: Census Block"},
+    {val: "precinct", label: "Geography: Precinct"},
+    {val: "polling_location", label: "Geography: Polling Location"},
     {val: "history_General", label: "Voting History (General)"},
     {val: "history_Primary", label: "Voting History (Primary)"}
 ];
@@ -93,11 +99,18 @@ function buildMappingTable() {
             option.innerText = opt.label;
             
             // Auto mapping guesser
-            let normalizeCols = col.toLowerCase().replace(/[^a-z]/g, '');
-            let normalizeOpt = opt.val.replace(/_/g, '');
+            let normalizeCols = col.toLowerCase().replace(/[^a-z0-9]/g, '');
+            let normalizeOpt = opt.val.toLowerCase().replace(/[^a-z0-9]/g, '');
             if (normalizeOpt !== "" && normalizeCols.includes(normalizeOpt)) {
                 option.selected = true;
             }
+            // Smart enhancements for complex schemas
+            if (opt.val === 'address_part' && (normalizeCols.includes('address') || normalizeCols.includes('line'))) option.selected = true;
+            if (opt.val === 'phone_number' && (normalizeCols.includes('phone') || normalizeCols.includes('cell') || normalizeCols.includes('mobile'))) option.selected = true;
+            if (opt.val === 'district_CD' && (normalizeCols.includes('cd') || normalizeCols.includes('congressional'))) option.selected = true;
+            if (opt.val === 'district_SD' && (normalizeCols.includes('sd') || normalizeCols.includes('statesenate'))) option.selected = true;
+            if (opt.val === 'district_HD' && (normalizeCols.includes('hd') || normalizeCols.includes('statehouse') || normalizeCols.includes('assembly'))) option.selected = true;
+            if (opt.val === 'district_Supervisor' && normalizeCols.includes('supervisor')) option.selected = true;
             select.appendChild(option);
         });
         tdSelect.appendChild(select);
@@ -152,7 +165,9 @@ function performSearch() {
     let filters = {
         city: document.getElementById('filter-city').value,
         party: document.getElementById('filter-party').value,
-        precinct: document.getElementById('filter-precinct').value
+        precinct: document.getElementById('filter-precinct').value,
+        district_CD: document.getElementById('filter-district_CD').value,
+        district_SD: document.getElementById('filter-district_SD').value
     };
     
     window.pywebview.api.search_voters(query, filters, 100, 0).then(results => {
