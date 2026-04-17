@@ -73,11 +73,40 @@ function loadDashboardStats() {
         document.getElementById('dash-total-voters').innerText = stats.total_voters.toLocaleString();
         let tbody = document.getElementById('dash-files-tbody');
         tbody.innerHTML = '';
+        if (stats.files.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted)">No files imported yet</td></tr>';
+            return;
+        }
         stats.files.forEach(f => {
+            let shortPath = f.filename.split(/[\\/]/).pop();
             let tr = document.createElement('tr');
-            tr.innerHTML = `<td>${f.id}</td><td>${f.filename}</td><td>${f.state}</td><td>${f.county}</td><td>${f.import_date}</td>`;
+            tr.innerHTML = `
+                <td>${f.id}</td>
+                <td title="${escapeHtml(f.filename)}">${escapeHtml(shortPath)}</td>
+                <td>${f.state || '—'}</td>
+                <td>${f.county || '—'}</td>
+                <td>${f.import_date || '—'}</td>
+                <td>
+                    <button class="btn btn-danger" onclick="deleteFile(${f.id}, '${escapeHtml(shortPath).replace(/'/g, "\\'")}')">Delete</button>
+                </td>
+            `;
             tbody.appendChild(tr);
         });
+    });
+}
+
+function deleteFile(fileId, fileName) {
+    if (!confirm(`Delete "${fileName}" and ALL its voter records?\n\nThis cannot be undone.`)) return;
+    window.pywebview.api.delete_file(fileId).then(result => {
+        if (result.status === 'success') {
+            // Refresh dashboard + search lookup lists
+            loadDashboardStats();
+            loadElections();
+            loadParties();
+            loadTags();
+        } else {
+            alert('Delete failed: ' + (result.message || 'Unknown error'));
+        }
     });
 }
 

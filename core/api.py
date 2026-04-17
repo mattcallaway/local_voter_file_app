@@ -286,6 +286,35 @@ class AppAPI:
         files = self.db.query("SELECT * FROM files ORDER BY import_date DESC")
         return {"total_voters": total_voters, "files": files}
 
+    def delete_file(self, file_id):
+        """
+        Delete an imported file and all associated voter records.
+        Cascades through: voter_tags → list_voters → voters → files.
+        The voters_ad trigger automatically cleans up FTS entries on each row delete.
+        """
+        file_id = int(file_id)
+        c = self.db.conn.cursor()
+        c.execute("BEGIN")
+        # Remove tag associations for voters in this file
+        c.execute(
+            "DELETE FROM voter_tags WHERE voter_id IN (SELECT id FROM voters WHERE file_id = ?)",
+            (file_id,)
+        )
+        # Remove list associations for voters in this file
+        c.execute(
+            "DELETE FROM list_voters WHERE voter_id IN (SELECT id FROM voters WHERE file_id = ?)",
+            (file_id,)
+        )
+        # Delete the voters (the voters_ad trigger handles FTS cleanup per row)
+        c.execute("DELETE FROM voters WHERE file_id = ?", (file_id,))
+        # Delete the file record
+        c.execute("DELETE FROM files WHERE id = ?", (file_id,))
+        self.db.conn.commit()
+        # Invalidate caches since available elections/parties may have changed
+        self._invalidate_cache()
+        return {"status": "success"}
+
+
     # ------------------------------------------------------------------
     # Lists
     # ------------------------------------------------------------------

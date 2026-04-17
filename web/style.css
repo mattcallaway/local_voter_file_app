@@ -814,4 +814,26 @@ select {
     padding: 5px 8px;
 }
 
+/* ================================================================
+   DANGER BUTTON (delete actions)
+   ================================================================ */
+.btn-danger {
+    padding: 4px 10px;
+    font-size: 0.82em;
+    font-weight: 600;
+    background: transparent;
+    border: 1px solid #e53e3e;
+    color: #e53e3e;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+}
+
+.btn-danger:hover {
+    background: #e53e3e;
+    color: white;
+}
+
+
 
