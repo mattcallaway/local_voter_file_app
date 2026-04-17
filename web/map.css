@@ -1,0 +1,228 @@
+/* ================================================================
+   CANVASS MAP — Layout, Controls, Popups, Cluster Icons
+   ================================================================ */
+
+/* Full-height flex layout */
+#map.tab-content {
+    padding: 0;
+    overflow: hidden;
+}
+
+.map-layout {
+    display: flex;
+    height: calc(100vh - 52px);   /* subtract sidebar nav height */
+    overflow: hidden;
+}
+
+/* ── Left control panel ───────────────────────────────────────── */
+.map-sidebar {
+    width: 270px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    border-radius: 0;
+    border-top: none;
+    border-bottom: none;
+    border-left: none;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.map-sidebar h3 {
+    margin: 0 0 2px;
+    font-size: 1em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.map-sidebar hr {
+    margin: 10px 0;
+    border: none;
+    border-top: 1px solid var(--border-color);
+}
+
+/* ── Map container ────────────────────────────────────────────── */
+.map-container-wrapper {
+    flex: 1;
+    position: relative;
+    min-width: 0;
+}
+
+#canvass-map {
+    position: absolute;
+    inset: 0;
+}
+
+/* ── Display mode toggle ──────────────────────────────────────── */
+.mode-toggle {
+    display: flex;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.mode-btn {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 0.82em;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: background 0.15s, color 0.15s;
+    font-family: inherit;
+}
+
+.mode-btn.active {
+    background: var(--accent-color);
+    color: #fff;
+    font-weight: 600;
+}
+
+/* ── Geocoding progress bar ───────────────────────────────────── */
+.progress-bar {
+    height: 6px;
+    background: var(--secondary-color);
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 6px 0 4px;
+}
+
+#progress-fill {
+    height: 100%;
+    background: var(--accent-color);
+    width: 0%;
+    transition: width 0.3s;
+    border-radius: 3px;
+}
+
+/* ── Selection info/action panel ──────────────────────────────── */
+.selection-info {
+    padding: 10px 12px;
+    border: 1px solid var(--accent-color);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--accent-color) 6%, var(--card-bg));
+    margin-top: 8px;
+}
+
+.selection-info p {
+    margin: 0 0 10px;
+    font-size: 0.9em;
+    line-height: 1.5;
+}
+
+#btn-select-rect.active {
+    background: var(--accent-color);
+    color: #fff;
+    border-color: var(--accent-color);
+}
+
+/* ── Filter section label ─────────────────────────────────────── */
+.map-section-label {
+    font-size: 0.78em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    margin: 8px 0 4px;
+}
+
+/* ── Map stats bars ───────────────────────────────────────────── */
+#map-filtered-stats {
+    font-size: 0.8em;
+    color: var(--text-muted);
+    margin: 2px 0 0;
+}
+
+/* ── Empty state ──────────────────────────────────────────────── */
+#map-empty-state {
+    pointer-events: none;
+}
+
+/* ── Custom cluster icons ─────────────────────────────────────── */
+.ci {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: #fff;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    border: 2px solid rgba(255, 255, 255, 0.55);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+}
+
+.ci-sm { width: 32px; height: 32px; font-size: 11px; background: #3b82f6; }
+.ci-md { width: 40px; height: 40px; font-size: 12px; background: #7c3aed; }
+.ci-lg { width: 50px; height: 50px; font-size: 13px; background: #dc2626; }
+
+/* ── Leaflet popup content ────────────────────────────────────── */
+.map-popup {
+    min-width: 200px;
+    max-width: 320px;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.pp-addr {
+    font-size: 0.9em;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.pp-voters {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.pp-foot {
+    font-size: 0.76em;
+    color: #888;
+    margin-top: 6px;
+    padding-top: 5px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.ppv-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    font-size: 0.85em;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.ppv-row:last-child { border: none; }
+
+.ppv-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.ppv-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ppv-meta {
+    font-size: 0.78em;
+    color: #777;
+    white-space: nowrap;
+    margin-left: auto;
+}
+
+/* ── Responsive: hide sidebar on very small screens ──────────── */
+@media (max-width: 700px) {
+    .map-sidebar {
+        width: 220px;
+        padding: 10px 12px;
+    }
+}

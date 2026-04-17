@@ -15,6 +15,12 @@ function switchTab(tabId) {
     document.getElementById(tabId).classList.add('active');
     document.getElementById('tab-' + tabId).classList.add('active');
     if (tabId === 'dashboard') loadDashboardStats();
+    if (tabId === 'map' && typeof onMapTabActivate === 'function') onMapTabActivate();
+}
+
+function mapList(listId, listName) {
+    switchTab('map');
+    if (typeof loadListMap === 'function') loadListMap(listId, listName);
 }
 
 // ============================================================
@@ -751,15 +757,34 @@ function saveAsList() {
 
 function loadLists() {
     window.pywebview.api.get_lists().then(lists => {
-        let ul = document.getElementById('saved-lists');
+        let ul         = document.getElementById('saved-lists');
         let filterList = document.getElementById('filter-list');
-        ul.innerHTML = '';
+        let mapSelect  = document.getElementById('map-list-select');
+
+        ul.innerHTML         = '';
         filterList.innerHTML = '<option value="">-- Any --</option>';
+        if (mapSelect) mapSelect.innerHTML = '<option value="">-- Select a saved list --</option>';
+
         lists.forEach(l => {
+            // Search-tab list item with Map button
             let li = document.createElement('li');
-            li.innerText = l.name;
+            li.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:6px;';
+            li.innerHTML = `
+                <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(l.name)}</span>
+                <button class="btn-pill"
+                        style="font-size:0.7em;padding:2px 7px;flex-shrink:0;border-color:var(--accent-color);color:var(--accent-color);"
+                        onclick="mapList(${l.id}, '${escapeHtml(l.name).replace(/'/g, "\\'")}')">&#128506; Map</button>
+            `;
             ul.appendChild(li);
-            filterList.innerHTML += `<option value="${l.id}">${l.name}</option>`;
+
+            // Search filter dropdown
+            filterList.innerHTML += `<option value="${l.id}">${escapeHtml(l.name)}</option>`;
+
+            // Map tab list selector
+            if (mapSelect) {
+                mapSelect.innerHTML += `<option value="${l.id}" data-name="${escapeHtml(l.name)}">${escapeHtml(l.name)}</option>`;
+            }
         });
     });
 }
+

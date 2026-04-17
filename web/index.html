@@ -7,6 +7,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <!-- Leaflet map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+    <link rel="stylesheet" href="map.css">
 </head>
 <body data-theme="dark">
 
@@ -57,6 +62,7 @@
             <li id="tab-dashboard" class="active" onclick="switchTab('dashboard')">Dashboard</li>
             <li id="tab-import" onclick="switchTab('import')">Import Data</li>
             <li id="tab-search" onclick="switchTab('search')">Search &amp; Lists</li>
+            <li id="tab-map" onclick="switchTab('map')">&#128506; Canvass Map</li>
         </ul>
 
         <!-- Tag Manager -->
@@ -271,6 +277,108 @@
         </section>
     </div>
 
+    <!-- ============================================================ -->
+    <!-- CANVASS MAP TAB                                              -->
+    <!-- ============================================================ -->
+    <section id="map" class="tab-content">
+        <div class="map-layout">
+
+            <!-- Left control sidebar -->
+            <div class="map-sidebar card">
+
+                <!-- List picker (populated by loadLists) -->
+                <div class="form-group">
+                    <label style="font-size:0.8em;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);">Active List</label>
+                    <select id="map-list-select" class="full-width" onchange="onMapListSelect(this)">
+                        <option value="">-- Select a saved list --</option>
+                    </select>
+                </div>
+
+                <!-- List name + stats -->
+                <div id="map-list-header" style="display:none;">
+                    <h3 id="map-list-name"></h3>
+                    <p id="map-stats" class="text-muted" style="margin:0; font-size:0.82em;"></p>
+                    <p id="map-filtered-stats"></p>
+                </div>
+
+                <!-- Geocode button + progress -->
+                <div class="form-group" id="geocode-btn-row" style="display:none;">
+                    <button class="btn primary full-width" id="btn-geocode" onclick="geocodeCurrentList()">
+                        &#128205; Geocode Addresses
+                    </button>
+                    <div id="geocode-progress" style="display:none; margin-top:6px;">
+                        <div class="progress-bar"><div id="progress-fill"></div></div>
+                        <p id="progress-text" style="font-size:0.8em; margin:3px 0 0; color:var(--text-muted);"></p>
+                    </div>
+                </div>
+
+                <!-- Display mode -->
+                <div class="form-group" id="map-controls" style="display:none;">
+                    <label class="map-section-label">Display Mode</label>
+                    <div class="mode-toggle">
+                        <button class="mode-btn active" id="mode-cluster" onclick="setMapMode('cluster')">Clusters</button>
+                        <button class="mode-btn" id="mode-heat" onclick="setMapMode('heat')">Heat Map</button>
+                    </div>
+                </div>
+
+                <!-- Filters + selection (revealed after a list loads) -->
+                <div id="map-filter-panel" style="display:none;">
+                    <hr>
+                    <p class="map-section-label">Filters</p>
+                    <div class="form-group">
+                        <label>Party</label>
+                        <select id="map-filter-party" class="full-width" onchange="applyMapFilters()"><option value="">All Parties</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Precinct</label>
+                        <input type="text" id="map-filter-precinct" class="full-width" placeholder="Filter precinct…" oninput="applyMapFilters()">
+                    </div>
+                    <div class="form-group">
+                        <label>Tag</label>
+                        <select id="map-filter-tag" class="full-width" onchange="applyMapFilters()"><option value="">All Tags</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                            <input type="checkbox" id="map-household-group" checked onchange="applyMapFilters()">
+                            Group by Household
+                        </label>
+                    </div>
+
+                    <hr>
+                    <p class="map-section-label">Selection Tools</p>
+                    <button class="btn secondary full-width" id="btn-select-rect" onclick="activateRectSelect()">&#9633; Draw Rectangle</button>
+                    <button class="btn secondary full-width mt-1" onclick="clearMapSelection()">&#10005; Clear Selection</button>
+
+                    <!-- Selection count + actions -->
+                    <div id="map-selection-info" class="selection-info" style="display:none;">
+                        <p>
+                            <strong id="selected-voter-count">0</strong> voter<span id="sel-voter-plural">s</span> selected<br>
+                            <strong id="selected-household-count">0</strong> door-knock stops
+                        </p>
+                        <button class="btn primary full-width" onclick="saveMapSelectionAsNewList()">&#128190; Save as New List</button>
+                        <button class="btn secondary full-width mt-1" onclick="exportSelectedVoters()">&#128229; Export CSV</button>
+                    </div>
+                </div>
+
+            </div><!-- /map-sidebar -->
+
+            <!-- Map area -->
+            <div class="map-container-wrapper">
+                <div id="map-empty-state" style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:8px;color:var(--text-muted);">
+                    <div style="font-size:3em;">&#128506;&#65039;</div>
+                    <h3 style="margin:0;">Canvass Map</h3>
+                    <p style="text-align:center;max-width:300px;margin:0;">Select a saved voter list on the left,<br>or click <strong>&#128506; Map</strong> on any list in the Search tab.</p>
+                </div>
+                <div id="canvass-map" style="display:none;width:100%;height:100%;"></div>
+            </div>
+
+        </div>
+    </section>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
     <script src="app.js"></script>
+    <script src="map.js"></script>
 </body>
 </html>

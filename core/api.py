@@ -15,6 +15,7 @@ class AppAPI:
         self.importer = Importer(db)
         self._elections_cache = None
         self._parties_cache = None
+        self._geocode_jobs = {}   # {list_id: {status, progress, total, message}}
 
     def _invalidate_cache(self):
         """Invalidate cached lookups. Called after any import."""
@@ -335,3 +336,177 @@ class AppAPI:
 
     def get_lists(self):
         return self.db.query("SELECT * FROM lists ORDER BY id DESC")
+
+    # ------------------------------------------------------------------
+    # Canvass map — geocoding & map data
+    # ------------------------------------------------------------------
+
+    def get_list_map_data(self, list_id):
+        """Return all voters in a list with their geocode columns and summary stats."""
+        list_id = int(list_id)
+        voters = self.db.query("""
+            SELECT v.id, v.first_name, v.middle_name, v.last_name, v.suffix,
+                   v.address, v.city, v.state, v.zip, v.party, v.age, v.sex,
+                   v.phone, v.precinct, v.lat, v.lng,
+                   v.geocode_status, v.geocode_confidence, v.geocode_address,
+                   v.raw_data, v.voting_history
+            FROM voters v
+            JOIN list_voters lv ON v.id = lv.voter_id
+            WHERE lv.list_id = ?
+            ORDER BY v.geocode_address NULLS LAST, v.address, v.last_name
+        """, (list_id,))
+
+        # Parse raw_data so geocoder can fall back to it for address building
+        for v in voters:
+            if v.get('raw_data'):
+                try:
+                    v['raw_data'] = json.loads(v['raw_data'])
+                except Exception:
+                    v['raw_data'] = {}
+            else:
+                v['raw_data'] = {}
+
+        total     = len(voters)
+        geocoded  = sum(1 for v in voters if v.get('geocode_status') == 'matched')
+        unmatched = sum(1 for v in voters if v.get('geocode_status') in ('unmatched', 'failed', 'no_address'))
+        pending   = total - geocoded - unmatched
+
+        return {
+            'voters': voters,
+            'stats': {
+                'total':     total,
+                'geocoded':  geocoded,
+                'unmatched': unmatched,
+                'pending':   pending,
+            }
+        }
+
+    def geocode_list(self, list_id):
+        """
+        Start a background thread that geocodes un-geocoded voters in the list.
+        JS should poll get_geocode_status() until status == 'done' or 'error'.
+        """
+        from core.geocoder import geocode_voters
+        list_id = int(list_id)
+
+        # Avoid double-starting
+        job = self._geocode_jobs.get(list_id, {})
+        if job.get('status') == 'running':
+            return {'status': 'already_running', 'total': job.get('total', 0)}
+
+        # Fetch only voters that still need geocoding
+        voters = self.db.query("""
+            SELECT v.id, v.address, v.city, v.state, v.zip,
+                   v.lat, v.lng, v.geocode_status, v.geocode_address, v.raw_data
+            FROM voters v
+            JOIN list_voters lv ON v.id = lv.voter_id
+            WHERE lv.list_id = ?
+              AND (v.geocode_status IS NULL OR v.geocode_status != 'matched')
+        """, (list_id,))
+
+        for v in voters:
+            if v.get('raw_data'):
+                try:
+                    v['raw_data'] = json.loads(v['raw_data'])
+                except Exception:
+                    v['raw_data'] = {}
+
+        if not voters:
+            return {'status': 'success', 'total': 0, 'geocoded': 0}
+
+        self._geocode_jobs[list_id] = {
+            'status': 'running', 'progress': 0,
+            'total': len(voters), 'message': 'Starting…',
+        }
+
+        def _run():
+            def cb(current, total, message):
+                self._geocode_jobs[list_id].update({
+                    'progress': current, 'total': total, 'message': message
+                })
+            try:
+                geocode_voters(self.db, voters, progress_callback=cb)
+                self._geocode_jobs[list_id]['status'] = 'done'
+            except Exception as exc:
+                self._geocode_jobs[list_id].update({'status': 'error', 'message': str(exc)})
+                print(f'[api] geocode_list error: {exc}')
+
+        threading.Thread(target=_run, daemon=True).start()
+        return {'status': 'started', 'total': len(voters)}
+
+    def get_geocode_status(self, list_id):
+        """Poll-able progress endpoint for an in-flight geocoding job."""
+        list_id = int(list_id)
+        return self._geocode_jobs.get(
+            list_id,
+            {'status': 'idle', 'progress': 0, 'total': 0, 'message': ''}
+        )
+
+    def save_map_selection(self, name, voter_ids):
+        """Save a geographic subset selected on the map as a new static list."""
+        if not name or not voter_ids:
+            return {'status': 'error', 'message': 'Name and voter IDs are required'}
+        return self.create_list(name, criteria=None, is_static=1, voter_ids=voter_ids)
+
+    def export_canvass_list(self, voter_ids):
+        """
+        Build a canvass-ready CSV: one row per voter, sorted by household (geocode_address),
+        with sequential stop numbers so canvassers know door-knock order.
+        Returns {'status', 'csv', 'count', 'stops'}.
+        """
+        import csv as _csv
+        import io as _io
+
+        if not voter_ids:
+            return {'status': 'error', 'message': 'No voters selected'}
+
+        placeholders = ','.join('?' for _ in voter_ids)
+        voters = self.db.query(f"""
+            SELECT v.id, v.first_name, v.middle_name, v.last_name, v.suffix,
+                   v.address, v.city, v.state, v.zip, v.party, v.age, v.sex,
+                   v.phone, v.precinct, v.lat, v.lng, v.geocode_address
+            FROM voters v
+            WHERE v.id IN ({placeholders})
+            ORDER BY v.geocode_address NULLS LAST, v.address, v.last_name
+        """, tuple(voter_ids))
+
+        if not voters:
+            return {'status': 'error', 'message': 'No voters found for given IDs'}
+
+        output = _io.StringIO()
+        fields = ['stop_num', 'household_address', 'first_name', 'middle_name',
+                  'last_name', 'suffix', 'party', 'age', 'sex', 'phone',
+                  'precinct', 'lat', 'lng', 'voter_id']
+        writer = _csv.DictWriter(output, fieldnames=fields)
+        writer.writeheader()
+
+        stop_num  = 0
+        last_addr = None
+        for v in voters:
+            addr = v.get('geocode_address') or v.get('address') or ''
+            if addr != last_addr:
+                stop_num += 1
+                last_addr = addr
+            writer.writerow({
+                'stop_num':         stop_num,
+                'household_address': addr,
+                'first_name':       v.get('first_name', ''),
+                'middle_name':      v.get('middle_name', ''),
+                'last_name':        v.get('last_name', ''),
+                'suffix':           v.get('suffix', ''),
+                'party':            v.get('party', ''),
+                'age':              v.get('age', ''),
+                'sex':              v.get('sex', ''),
+                'phone':            v.get('phone', ''),
+                'precinct':         v.get('precinct', ''),
+                'lat':              v.get('lat', ''),
+                'lng':              v.get('lng', ''),
+                'voter_id':         v['id'],
+            })
+
+        return {
+            'status': 'success',
+            'csv':    output.getvalue(),
+            'count':  len(voters),
+            'stops':  stop_num,
+        }

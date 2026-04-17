@@ -138,26 +138,33 @@ class Database:
 
         # Full desired column spec for the voters table
         voters_columns = {
-            'file_id':          'INTEGER',
-            'first_name':       'TEXT',
-            'middle_name':      'TEXT',
-            'last_name':        'TEXT',
-            'suffix':           'TEXT',
-            'address':          'TEXT',
-            'city':             'TEXT',
-            'state':            'TEXT',
-            'zip':              'TEXT',
-            'age':              'INTEGER',
-            'sex':              'TEXT',
-            'party':            'TEXT',
-            'phone':            'TEXT',
-            'precinct':         'TEXT',
-            'polling_location': 'TEXT',
-            'districts':        'TEXT',
-            'phones':           'TEXT',
-            'voting_history':   'TEXT',
-            'custom_data':      'TEXT',
-            'raw_data':         'TEXT',
+            'file_id':              'INTEGER',
+            'first_name':           'TEXT',
+            'middle_name':          'TEXT',
+            'last_name':            'TEXT',
+            'suffix':               'TEXT',
+            'address':              'TEXT',
+            'city':                 'TEXT',
+            'state':                'TEXT',
+            'zip':                  'TEXT',
+            'age':                  'INTEGER',
+            'sex':                  'TEXT',
+            'party':                'TEXT',
+            'phone':                'TEXT',
+            'precinct':             'TEXT',
+            'polling_location':     'TEXT',
+            'districts':            'TEXT',
+            'phones':               'TEXT',
+            'voting_history':       'TEXT',
+            'custom_data':          'TEXT',
+            'raw_data':             'TEXT',
+            # Geocode cache — populated on-demand when a saved list is mapped
+            'lat':                  'REAL',
+            'lng':                  'REAL',
+            'geocode_status':       'TEXT',   # pending | matched | unmatched | failed | no_address
+            'geocode_confidence':   'TEXT',   # matched address string from Census API
+            'geocode_address':      'TEXT',   # normalized address key used for geocoding
+            'geocode_at':           'TEXT',   # ISO timestamp of last geocode attempt
         }
 
         # Get the columns that already exist
@@ -171,7 +178,11 @@ class Database:
                 except Exception as e:
                     print(f'[db migration] Could not add voters.{col}: {e}')
 
+        # Index for geocode status — lets us quickly find un-geocoded voters in a list
+        c.execute('CREATE INDEX IF NOT EXISTS idx_voters_geocode_status ON voters(geocode_status)')
+
         self.conn.commit()
+
 
     def query(self, sql, args=()):
         c = self.conn.cursor()
