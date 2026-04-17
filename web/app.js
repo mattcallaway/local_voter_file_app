@@ -196,6 +196,11 @@ function startImport() {
 // ============================================================
 // MODAL TAG MANAGEMENT
 // ============================================================
+let modalCreateColor = '#3182ce';
+let bulkCreateColor  = '#3182ce';
+
+const TAG_COLOR_OPTIONS = ['#3182ce','#e53e3e','#38a169','#d69e2e','#805ad5','#dd6b20','#319795','#e91e8c'];
+
 function renderModalTags(voterId, tags) {
     let container = document.getElementById('modal-tags-container');
     if (!container) return;
@@ -218,19 +223,37 @@ function renderModalTags(voterId, tags) {
     }
     container.appendChild(chipsDiv);
 
-    // Add tag row — only show tags not already applied
+    // Add existing tag row
     let appliedIds = new Set(tags.map(t => t.id));
     let available = allTags.filter(t => !appliedIds.has(t.id));
-    if (available.length > 0) {
-        let addRow = document.createElement('div');
-        addRow.className = 'modal-add-tag-row';
-        let opts = available.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
-        addRow.innerHTML = `
-            <select id="modal-tag-add-select"><option value="">+ Add tag…</option>${opts}</select>
-            <button class="btn secondary" style="padding:5px 10px; font-size:0.85em;" onclick="addTagToVoter(${voterId})">Add</button>
-        `;
-        container.appendChild(addRow);
-    }
+    let addRow = document.createElement('div');
+    addRow.className = 'modal-add-tag-row';
+    let opts = available.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+    addRow.innerHTML = `
+        <select id="modal-tag-add-select"><option value="">+ Add existing tag…</option>${opts}</select>
+        <button class="btn secondary" style="padding:5px 10px; font-size:0.85em;" onclick="addTagToVoter(${voterId})">Add</button>
+        <button class="btn-pill" style="white-space:nowrap;" onclick="toggleModalTagCreate()">+ New Tag</button>
+    `;
+    container.appendChild(addRow);
+
+    // Inline create new tag form (hidden by default)
+    let createForm = document.createElement('div');
+    createForm.id = 'modal-tag-create-form';
+    createForm.className = 'modal-create-tag-form';
+    createForm.style.display = 'none';
+    let swatchHtml = TAG_COLOR_OPTIONS.map((c, i) =>
+        `<div class="color-swatch${i === 0 ? ' active' : ''}" style="background:${c}" onclick="selectModalCreateColor('${c}', this)"></div>`
+    ).join('');
+    createForm.innerHTML = `
+        <input type="text" id="modal-create-tag-name" placeholder="New tag name…"
+               style="width:100%; box-sizing:border-box; font-size:0.85em; margin-bottom:6px;"
+               onkeyup="if(event.key==='Enter') createAndApplyTag(${voterId})">
+        <div class="color-swatches">${swatchHtml}</div>
+        <button class="btn primary"
+                style="width:100%; margin-top:8px; font-size:0.82em; padding:6px;"
+                onclick="createAndApplyTag(${voterId})">Create &amp; Add to This Voter</button>
+    `;
+    container.appendChild(createForm);
 }
 
 function addTagToVoter(voterId) {
@@ -245,6 +268,84 @@ function addTagToVoter(voterId) {
 function removeTagFromVoter(voterId, tagId) {
     window.pywebview.api.remove_voter_tag(voterId, tagId).then(() => {
         window.pywebview.api.get_voter_tags(voterId).then(tags => renderModalTags(voterId, tags));
+    });
+}
+
+function toggleModalTagCreate() {
+    let form = document.getElementById('modal-tag-create-form');
+    if (!form) return;
+    let isHidden = form.style.display === 'none';
+    form.style.display = isHidden ? 'block' : 'none';
+    if (isHidden) {
+        // Reset color selection to first swatch
+        modalCreateColor = TAG_COLOR_OPTIONS[0];
+        form.querySelectorAll('.color-swatch').forEach((s, i) =>
+            s.classList.toggle('active', i === 0)
+        );
+        let inp = document.getElementById('modal-create-tag-name');
+        if (inp) { inp.value = ''; inp.focus(); }
+    }
+}
+
+function selectModalCreateColor(color, el) {
+    modalCreateColor = color;
+    // Only affect swatches inside the modal create form
+    let form = document.getElementById('modal-tag-create-form');
+    if (form) form.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+    el.classList.add('active');
+}
+
+function createAndApplyTag(voterId) {
+    let nameInput = document.getElementById('modal-create-tag-name');
+    let name = nameInput ? nameInput.value.trim() : '';
+    if (!name) { if (nameInput) nameInput.focus(); return; }
+    window.pywebview.api.create_tag(name, modalCreateColor).then(result => {
+        if (result.status !== 'success') { alert(result.message); return; }
+        // Apply to this voter then refresh everything
+        window.pywebview.api.add_voter_tag(voterId, result.id).then(() => {
+            loadTags();  // refreshes sidebar + bulk select + has_tag filter
+            window.pywebview.api.get_voter_tags(voterId).then(tags => renderModalTags(voterId, tags));
+        });
+    });
+}
+
+// ============================================================
+// BULK CREATE & APPLY TAG
+// ============================================================
+function toggleBulkCreateTag() {
+    let section = document.getElementById('bulk-create-tag-section');
+    let isHidden = section.style.display === 'none';
+    section.style.display = isHidden ? 'block' : 'none';
+    if (isHidden) {
+        // Reset
+        bulkCreateColor = TAG_COLOR_OPTIONS[0];
+        section.querySelectorAll('.color-swatch').forEach((s, i) =>
+            s.classList.toggle('active', i === 0)
+        );
+        let inp = document.getElementById('bulk-new-tag-name');
+        if (inp) { inp.value = ''; inp.focus(); }
+    }
+}
+
+function selectBulkCreateColor(color, el) {
+    bulkCreateColor = color;
+    let section = document.getElementById('bulk-create-tag-section');
+    if (section) section.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+    el.classList.add('active');
+}
+
+function createAndBulkApplyTag() {
+    let checked = Array.from(document.querySelectorAll('.row-select:checked')).map(cb => parseInt(cb.value));
+    let name = document.getElementById('bulk-new-tag-name').value.trim();
+    if (checked.length === 0) { alert('No voters selected in results'); return; }
+    if (!name) { document.getElementById('bulk-new-tag-name').focus(); return; }
+    window.pywebview.api.create_tag(name, bulkCreateColor).then(result => {
+        if (result.status !== 'success') { alert(result.message); return; }
+        window.pywebview.api.bulk_add_tag(checked, result.id).then(r => {
+            loadTags();            // refresh sidebar + dropdowns
+            toggleBulkCreateTag(); // close form
+            alert(`"${name}" created and applied to ${r.count} voter${r.count !== 1 ? 's' : ''}!`);
+        });
     });
 }
 

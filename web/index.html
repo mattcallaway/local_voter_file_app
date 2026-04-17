@@ -222,6 +222,27 @@
                             <button class="btn secondary" id="btn-save-list" onclick="saveAsList()">Save as List</button>
                             <select id="bulk-tag-select" style="max-width: 130px;"><option value="">-- Tag --</option></select>
                             <button class="btn secondary" onclick="applyBulkTag()">Tag Selected</button>
+                            <button class="btn-pill" onclick="toggleBulkCreateTag()" style="border-color:var(--accent-color); color:var(--accent-color);">&#43; New Tag</button>
+                        </div>
+                    </div>
+                    <!-- Bulk create & apply tag form -->
+                    <div id="bulk-create-tag-section" style="display:none;" class="bulk-create-tag-form">
+                        <span class="bulk-create-label">Create &amp; apply to selected voters:</span>
+                        <input type="text" id="bulk-new-tag-name" placeholder="New tag name…"
+                               onkeyup="if(event.key==='Enter') createAndBulkApplyTag()">
+                        <div class="color-swatches" style="margin: 6px 0;">
+                            <div class="color-swatch active" style="background:#3182ce" onclick="selectBulkCreateColor('#3182ce', this)"></div>
+                            <div class="color-swatch" style="background:#e53e3e" onclick="selectBulkCreateColor('#e53e3e', this)"></div>
+                            <div class="color-swatch" style="background:#38a169" onclick="selectBulkCreateColor('#38a169', this)"></div>
+                            <div class="color-swatch" style="background:#d69e2e" onclick="selectBulkCreateColor('#d69e2e', this)"></div>
+                            <div class="color-swatch" style="background:#805ad5" onclick="selectBulkCreateColor('#805ad5', this)"></div>
+                            <div class="color-swatch" style="background:#dd6b20" onclick="selectBulkCreateColor('#dd6b20', this)"></div>
+                            <div class="color-swatch" style="background:#319795" onclick="selectBulkCreateColor('#319795', this)"></div>
+                            <div class="color-swatch" style="background:#e91e8c" onclick="selectBulkCreateColor('#e91e8c', this)"></div>
+                        </div>
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn primary" style="font-size:0.85em; padding: 6px 14px;" onclick="createAndBulkApplyTag()">Create &amp; Apply</button>
+                            <button class="btn secondary" style="font-size:0.85em; padding: 6px 10px;" onclick="toggleBulkCreateTag()">Cancel</button>
                         </div>
                     </div>
                     <p class="text-muted" style="margin: 0 0 10px; font-size: 0.85em;">Click any row to view full voter profile.</p>
