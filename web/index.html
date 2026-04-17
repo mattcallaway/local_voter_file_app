@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="description" content="CivicData — Local Voter File Manager">
+    <title>CivicData — Voter File Manager</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="dark">
+
+    <!-- ============================================================ -->
+    <!-- VOTER PROFILE MODAL                                          -->
+    <!-- ============================================================ -->
+    <div id="voter-modal-overlay" class="modal-overlay" onclick="closeModalOnBackdrop(event)">
+        <div class="modal-container">
+            <button class="modal-close" onclick="closeModal()" title="Close (Esc)">✕</button>
+            <div class="modal-header">
+                <div>
+                    <h2 id="modal-voter-name" class="modal-voter-name"></h2>
+                    <p id="modal-voter-id" class="modal-voter-id"></p>
+                </div>
+                <span id="modal-voter-party" class="party-badge"></span>
+            </div>
+            <div class="modal-body">
+                <div class="modal-section">
+                    <h4 class="modal-section-title">📋 Contact &amp; Demographics</h4>
+                    <div id="modal-contact-block"></div>
+                </div>
+                <div class="modal-section">
+                    <h4 class="modal-section-title">🗺️ Districts</h4>
+                    <div id="modal-districts-grid" class="info-grid"></div>
+                </div>
+                <div class="modal-section">
+                    <h4 class="modal-section-title">🗳️ Voting History</h4>
+                    <div id="modal-history-timeline" class="history-timeline"></div>
+                </div>
+                <div class="modal-section">
+                    <h4 class="modal-section-title modal-raw-toggle" id="modal-raw-toggle" onclick="toggleRawData()">▶ Raw Data</h4>
+                    <div id="modal-raw-data" class="raw-data-block"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- SIDEBAR                                                      -->
+    <!-- ============================================================ -->
+    <div class="sidebar">
+        <h2 class="app-title">CivicData</h2>
+        <ul class="nav">
+            <li id="tab-dashboard" class="active" onclick="switchTab('dashboard')">Dashboard</li>
+            <li id="tab-import" onclick="switchTab('import')">Import Data</li>
+            <li id="tab-search" onclick="switchTab('search')">Search &amp; Lists</li>
+        </ul>
+        <div style="flex-grow: 1"></div>
+        <div class="theme-toggle">
+            <button onclick="toggleTheme()">☀️ Toggle Light/Dark</button>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- MAIN CONTENT                                                 -->
+    <!-- ============================================================ -->
+    <div class="main-content">
+
+        <!-- Dashboard -->
+        <section id="dashboard" class="tab-content active">
+            <h1>Dashboard</h1>
+            <div class="stats-cards">
+                <div class="card">
+                    <h3>Total Voters</h3>
+                    <p id="dash-total-voters">0</p>
+                </div>
+            </div>
+            <h3>Imported Files</h3>
+            <table class="data-table">
+                <thead>
+                    <tr><th>ID</th><th>Filename</th><th>State</th><th>County</th><th>Import Date</th></tr>
+                </thead>
+                <tbody id="dash-files-tbody"></tbody>
+            </table>
+        </section>
+
+        <!-- Import -->
+        <section id="import" class="tab-content">
+            <h1>Import Voter File (CSV)</h1>
+            <div class="card">
+                <button class="btn primary" onclick="selectCsv()">1. Select CSV File</button>
+                <div id="selected-file-info" style="margin-top: 10px; font-weight: bold; color: var(--accent-color);"></div>
+
+                <div id="mapping-section" style="display: none; margin-top: 20px;">
+                    <h3>2. Map Columns</h3>
+                    <p class="text-muted">Match your CSV columns to standard fields. Unmapped columns are saved as raw data automatically.</p>
+                    <div class="form-group" style="display:flex; gap: 10px;">
+                        <input type="text" id="import-state" placeholder="State (e.g. CA)">
+                        <input type="text" id="import-county" placeholder="County (e.g. Travis)">
+                    </div>
+                    <table class="mapping-table data-table" id="mapping-table">
+                        <thead>
+                            <tr><th>Standard Target Field</th><th>CSV Column Header</th></tr>
+                        </thead>
+                        <tbody id="mapping-tbody"></tbody>
+                    </table>
+                    <button class="btn primary mt-3" onclick="startImport()">3. Run Import</button>
+                </div>
+
+                <div id="import-progress" style="display:none; margin-top: 20px;">
+                    <p>Importing... Please wait. <span class="spinner"></span></p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Search & Lists -->
+        <section id="search" class="tab-content">
+            <h1>Search &amp; Build Lists</h1>
+            <div class="search-layout">
+
+                <!-- Filter panel -->
+                <div class="search-filters card">
+                    <h3>Filters</h3>
+                    <input type="text" id="search-query" class="full-width"
+                        placeholder="Quick Search (Name, Address, Zip)…"
+                        onkeyup="if(event.key === 'Enter') performSearch()">
+
+                    <div class="form-group mt-3">
+                        <label>City</label>
+                        <input type="text" id="filter-city" placeholder="City">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Party</label>
+                        <div id="party-checklist" class="checkbox-list"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Precinct</label>
+                        <input type="text" id="filter-precinct" placeholder="Precinct ID">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Congressional District (CD)</label>
+                        <input type="text" id="filter-district_CD" placeholder="e.g. 12">
+                    </div>
+
+                    <div class="form-group">
+                        <label>State Senate (SD)</label>
+                        <input type="text" id="filter-district_SD" placeholder="e.g. 5">
+                    </div>
+
+                    <hr>
+                    <h3>Voting History</h3>
+
+                    <div class="form-group">
+                        <div class="helper-btns">
+                            <button class="btn-pill" onclick="selectEvenYears()">Even Yrs</button>
+                            <button class="btn-pill" onclick="selectOddYears()">Odd Yrs</button>
+                            <button class="btn-pill" onclick="selectPrimaries()">Primaries</button>
+                            <button class="btn-pill" onclick="selectGenerals()">Generals</button>
+                            <button class="btn-pill btn-pill-clear" onclick="clearHistory()">Clear</button>
+                        </div>
+                        <div id="election-checklist" class="checkbox-list"></div>
+                        <div class="history-math-row mt-1">
+                            <select id="filter-history-mode">
+                                <option value="at_least">At Least</option>
+                                <option value="exactly">Exactly</option>
+                            </select>
+                            <input type="number" id="filter-history-threshold" placeholder="N elections" min="1">
+                        </div>
+                    </div>
+
+                    <div class="form-group mt-2">
+                        <label>In List</label>
+                        <select id="filter-list" class="full-width"><option value="">-- Any --</option></select>
+                    </div>
+
+                    <button class="btn primary full-width mt-3" onclick="performSearch()">Search</button>
+
+                    <hr>
+                    <h3>Saved Lists</h3>
+                    <ul id="saved-lists" class="nav small"></ul>
+                </div>
+
+                <!-- Results panel -->
+                <div class="search-results card">
+                    <div class="results-header">
+                        <h3 id="results-count">Results (0)</h3>
+                        <div style="display: flex; gap: 5px; align-items: center;">
+                            <button class="btn secondary" id="btn-save-list" onclick="saveAsList()">Save as Static List</button>
+                        </div>
+                    </div>
+                    <p class="text-muted" style="margin: 0 0 10px; font-size: 0.85em;">Click any row to view full voter profile.</p>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Select</th>
+                                    <th>First</th>
+                                    <th>Middle</th>
+                                    <th>Last</th>
+                                    <th>Suffix</th>
+                                    <th>Address</th>
+                                    <th>City</th>
+                                    <th>Party</th>
+                                    <th>Age</th>
+                                </tr>
+                            </thead>
+                            <tbody id="results-tbody"></tbody>
+                        </table>
+                    </div>
+                    <div id="pagination-controls" class="pagination-controls"></div>
+                </div>
+
+            </div>
+        </section>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

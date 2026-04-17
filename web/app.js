@@ -1,0 +1,476 @@
+// ============================================================
+// THEME & TABS
+// ============================================================
+function toggleTheme() {
+    const body = document.body;
+    body.setAttribute('data-theme', body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+}
+
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.nav li').forEach(el => el.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    document.getElementById('tab-' + tabId).classList.add('active');
+    if (tabId === 'dashboard') loadDashboardStats();
+}
+
+// ============================================================
+// GLOBAL STATE
+// ============================================================
+let currentCsvFile = null;
+let currentColumns = [];
+let activeSearchResults = [];
+let currentPage = 0;
+let totalCount = 0;
+const PAGE_SIZE = 50;
+let lastQuery = '';
+let lastFilters = {};
+
+const standardFields = [
+    {val: "",                    label: "-- Ignore / Raw Data --"},
+    {val: "first_name",          label: "Core: First Name"},
+    {val: "middle_name",         label: "Core: Middle Name"},
+    {val: "last_name",           label: "Core: Last Name"},
+    {val: "suffix",              label: "Core: Suffix"},
+    {val: "age",                 label: "Core: Age"},
+    {val: "sex",                 label: "Core: Sex / Gender"},
+    {val: "party",               label: "Core: Party"},
+    {val: "address_part",        label: "Address: Street/Line (Combines)"},
+    {val: "city",                label: "Address: City"},
+    {val: "state",               label: "Address: State"},
+    {val: "zip",                 label: "Address: Zip Code"},
+    {val: "phone_number",        label: "Phone: Phone Number"},
+    {val: "phone_flag",          label: "Phone: Flag (e.g. IsCell)"},
+    {val: "district_CD",         label: "District: Congressional (CD)"},
+    {val: "district_SD",         label: "District: State Senate (SD)"},
+    {val: "district_HD",         label: "District: State House (HD)"},
+    {val: "district_Supervisor", label: "District: Supervisor"},
+    {val: "district_CensusBlock",label: "District: Census Block"},
+    {val: "precinct",            label: "Geography: Precinct"},
+    {val: "polling_location",    label: "Geography: Polling Location"},
+    {val: "history_Election",    label: "Voting History (Dynamic Auto-Parse)"}
+];
+
+// ============================================================
+// INITIALIZATION — single merged listener
+// ============================================================
+window.addEventListener('pywebviewready', function () {
+    loadDashboardStats();
+    loadLists();
+    loadElections();
+    loadParties();
+});
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+function loadDashboardStats() {
+    window.pywebview.api.get_stats().then(stats => {
+        document.getElementById('dash-total-voters').innerText = stats.total_voters.toLocaleString();
+        let tbody = document.getElementById('dash-files-tbody');
+        tbody.innerHTML = '';
+        stats.files.forEach(f => {
+            let tr = document.createElement('tr');
+            tr.innerHTML = `<td>${f.id}</td><td>${f.filename}</td><td>${f.state}</td><td>${f.county}</td><td>${f.import_date}</td>`;
+            tbody.appendChild(tr);
+        });
+    });
+}
+
+// ============================================================
+// IMPORT
+// ============================================================
+function selectCsv() {
+    window.pywebview.api.select_file().then(result => {
+        if (result) {
+            currentCsvFile = result.file_path;
+            currentColumns = result.columns;
+            let parts = currentCsvFile.split(/[\\\/]/);
+            document.getElementById('selected-file-info').innerText = 'Selected: ' + parts[parts.length - 1];
+            buildMappingTable();
+            document.getElementById('mapping-section').style.display = 'block';
+        }
+    });
+}
+
+function buildMappingTable() {
+    let tbody = document.getElementById('mapping-tbody');
+    tbody.innerHTML = '';
+    currentColumns.forEach(col => {
+        let tr = document.createElement('tr');
+        let tdSelect = document.createElement('td');
+        let select = document.createElement('select');
+        select.className = 'mapping-select';
+        select.setAttribute('data-csv-col', col);
+
+        standardFields.forEach(opt => {
+            let option = document.createElement('option');
+            option.value = opt.val;
+            option.innerText = opt.label;
+
+            let normCol = col.toLowerCase().replace(/[^a-z0-9]/g, '');
+            let normOpt = opt.val.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (normOpt !== '' && normCol.includes(normOpt)) option.selected = true;
+            if (opt.val === 'address_part'        && (normCol.includes('address') || normCol.includes('line'))) option.selected = true;
+            if (opt.val === 'phone_number'         && (normCol.includes('phone') || normCol.includes('cell') || normCol.includes('mobile'))) option.selected = true;
+            if (opt.val === 'district_CD'          && (normCol.includes('cd') || normCol.includes('congressional'))) option.selected = true;
+            if (opt.val === 'district_SD'          && (normCol.includes('sd') || normCol.includes('statesenate'))) option.selected = true;
+            if (opt.val === 'district_HD'          && (normCol.includes('hd') || normCol.includes('statehouse') || normCol.includes('assembly'))) option.selected = true;
+            if (opt.val === 'district_Supervisor'  && normCol.includes('supervisor')) option.selected = true;
+            if (opt.val === 'history_Election'     && (normCol.includes('general') || normCol.includes('primary') || normCol.includes('municipal') || normCol.includes('special') || normCol.includes('recall'))) option.selected = true;
+            select.appendChild(option);
+        });
+
+        tdSelect.appendChild(select);
+        let tdCol = document.createElement('td');
+        tdCol.innerText = col;
+        tr.appendChild(tdSelect);
+        tr.appendChild(tdCol);
+        tbody.appendChild(tr);
+    });
+}
+
+function startImport() {
+    if (!currentCsvFile) return;
+    let state = document.getElementById('import-state').value;
+    let county = document.getElementById('import-county').value;
+    let mapping = {};
+    document.querySelectorAll('.mapping-select').forEach(sel => {
+        if (sel.value) mapping[sel.getAttribute('data-csv-col')] = sel.value;
+    });
+
+    document.getElementById('mapping-section').style.display = 'none';
+    document.getElementById('import-progress').style.display = 'block';
+
+    window.pywebview.api.start_import(currentCsvFile, state, county, mapping).then(res => {
+        document.getElementById('import-progress').style.display = 'none';
+        if (res.status === 'success') {
+            alert('Import Successful!');
+            currentCsvFile = null;
+            document.getElementById('selected-file-info').innerText = '';
+            // Refresh cached lookup lists now that new data is in
+            loadElections();
+            loadParties();
+            switchTab('dashboard');
+        } else {
+            alert('Error during import: ' + res.message);
+            document.getElementById('mapping-section').style.display = 'block';
+        }
+    });
+}
+
+// ============================================================
+// PARTIES — dynamic checklist
+// ============================================================
+function loadParties() {
+    window.pywebview.api.get_parties().then(parties => {
+        let div = document.getElementById('party-checklist');
+        div.innerHTML = '';
+        if (!parties || parties.length === 0) {
+            div.innerHTML = '<span style="font-size:0.85em; color:var(--text-muted)">No data yet</span>';
+            return;
+        }
+        parties.forEach(p => {
+            let d = document.createElement('div');
+            d.innerHTML = `<label><input type="checkbox" class="party-cb" value="${p}"> ${p}</label>`;
+            div.appendChild(d);
+        });
+    });
+}
+
+// ============================================================
+// HISTORY HELPER BUTTONS
+// ============================================================
+const EVEN_YEARS = ['2000','2002','2004','2006','2008','2010','2012','2014','2016','2018','2020','2022','2024','2026'];
+const ODD_YEARS  = ['2001','2003','2005','2007','2009','2011','2013','2015','2017','2019','2021','2023','2025'];
+
+function selectEvenYears() {
+    document.querySelectorAll('.history-cb').forEach(cb => {
+        cb.checked = EVEN_YEARS.some(y => cb.value.includes(y));
+    });
+}
+
+function selectOddYears() {
+    document.querySelectorAll('.history-cb').forEach(cb => {
+        cb.checked = ODD_YEARS.some(y => cb.value.includes(y));
+    });
+}
+
+function selectPrimaries() {
+    document.querySelectorAll('.history-cb').forEach(cb => {
+        cb.checked = /primary/i.test(cb.value);
+    });
+}
+
+function selectGenerals() {
+    document.querySelectorAll('.history-cb').forEach(cb => {
+        cb.checked = /general/i.test(cb.value);
+    });
+}
+
+function clearHistory() {
+    document.querySelectorAll('.history-cb').forEach(cb => cb.checked = false);
+}
+
+// ============================================================
+// ELECTIONS — checklist load
+// ============================================================
+function loadElections() {
+    window.pywebview.api.get_elections().then(els => {
+        let div = document.getElementById('election-checklist');
+        div.innerHTML = '';
+        if (!els || els.length === 0) {
+            div.innerHTML = '<span style="font-size:0.85em; color:var(--text-muted)">No data yet</span>';
+            return;
+        }
+        els.forEach(el => {
+            let d = document.createElement('div');
+            d.innerHTML = `<label><input type="checkbox" class="history-cb" value="${el}"> ${el}</label>`;
+            div.appendChild(d);
+        });
+    });
+}
+
+// ============================================================
+// SEARCH
+// ============================================================
+function performSearch(resetPage = true) {
+    if (resetPage) currentPage = 0;
+
+    lastQuery = document.getElementById('search-query').value;
+
+    // Multi-select party checklist
+    let partiesSelected = Array.from(document.querySelectorAll('.party-cb:checked')).map(cb => cb.value);
+
+    // History math
+    let historySelected = Array.from(document.querySelectorAll('.history-cb:checked')).map(cb => cb.value);
+    let historyMath = null;
+    if (historySelected.length > 0) {
+        let threshold = parseInt(document.getElementById('filter-history-threshold').value) || 1;
+        let mode = document.getElementById('filter-history-mode').value;
+        historyMath = { elections: historySelected, threshold: threshold, mode: mode };
+    }
+
+    lastFilters = {
+        city:          document.getElementById('filter-city').value,
+        party:         partiesSelected.length > 0 ? partiesSelected : null,
+        precinct:      document.getElementById('filter-precinct').value,
+        district_CD:   document.getElementById('filter-district_CD').value,
+        district_SD:   document.getElementById('filter-district_SD').value,
+        history_math:  historyMath,
+        in_list:       document.getElementById('filter-list').value
+    };
+
+    window.pywebview.api.count_voters(lastQuery, lastFilters).then(count => {
+        totalCount = count;
+        const offset = currentPage * PAGE_SIZE;
+        return window.pywebview.api.search_voters(lastQuery, lastFilters, PAGE_SIZE, offset);
+    }).then(results => {
+        activeSearchResults = results;
+        const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+        document.getElementById('results-count').innerText =
+            `Results (${totalCount.toLocaleString()}) — Page ${currentPage + 1} of ${Math.max(1, totalPages)}`;
+
+        let tbody = document.getElementById('results-tbody');
+        tbody.innerHTML = '';
+
+        results.forEach(r => {
+            let tr = document.createElement('tr');
+            tr.className = 'voter-row';
+            tr.onclick = () => openVoterModal(r.id);
+            tr.innerHTML = `
+                <td><input type="checkbox" class="row-select" value="${r.id}" checked onclick="event.stopPropagation()"></td>
+                <td>${r.first_name || ''}</td>
+                <td>${r.middle_name || ''}</td>
+                <td>${r.last_name || ''}</td>
+                <td>${r.suffix || ''}</td>
+                <td>${r.address || ''}</td>
+                <td>${r.city || ''}</td>
+                <td>${r.party || ''}</td>
+                <td>${r.age || ''}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        renderPagination();
+    });
+}
+
+function renderPagination() {
+    const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+    let container = document.getElementById('pagination-controls');
+    container.innerHTML = '';
+    if (totalPages <= 1) return;
+
+    let prevBtn = document.createElement('button');
+    prevBtn.className = 'btn secondary';
+    prevBtn.innerText = '← Prev';
+    prevBtn.disabled = currentPage === 0;
+    prevBtn.onclick = () => { currentPage--; performSearch(false); };
+
+    let pageLabel = document.createElement('span');
+    pageLabel.className = 'page-label';
+    pageLabel.innerText = `${currentPage + 1} / ${totalPages}`;
+
+    let nextBtn = document.createElement('button');
+    nextBtn.className = 'btn secondary';
+    nextBtn.innerText = 'Next →';
+    nextBtn.disabled = currentPage >= totalPages - 1;
+    nextBtn.onclick = () => { currentPage++; performSearch(false); };
+
+    container.append(prevBtn, pageLabel, nextBtn);
+}
+
+// ============================================================
+// VOTER PROFILE MODAL
+// ============================================================
+function openVoterModal(voterId) {
+    window.pywebview.api.get_voter_detail(voterId).then(voter => {
+        if (!voter) {
+            alert('Could not find voter record. Please try searching again.');
+            return;
+        }
+
+        // Name + IDs
+        let fullName = [voter.first_name, voter.middle_name, voter.last_name, voter.suffix]
+            .filter(Boolean).join(' ');
+        document.getElementById('modal-voter-name').innerText = fullName || '(Unknown)';
+        document.getElementById('modal-voter-id').innerText = `Voter ID #${voter.id}`;
+
+        // Party badge
+        let partyEl = document.getElementById('modal-voter-party');
+        let partyCode = voter.party || 'N/P';
+        partyEl.innerText = partyCode;
+        let partySlug = partyCode.toLowerCase().replace(/[^a-z]/g, '').slice(0, 3);
+        partyEl.className = `party-badge party-${partySlug}`;
+
+        // Contact block
+        let contactEl = document.getElementById('modal-contact-block');
+        let addr = [voter.address, voter.city, voter.state, voter.zip].filter(Boolean).join(', ');
+        contactEl.innerHTML = `
+            <div class="contact-row">🏠 ${addr || '—'}</div>
+            <div class="contact-row">📞 ${voter.phone || '—'}</div>
+            <div class="contact-row">🎂 Age: <strong>${voter.age || '—'}</strong> &nbsp; ⚧ ${voter.sex || '—'} &nbsp; 📍 Precinct: <strong>${voter.precinct || '—'}</strong></div>
+        `;
+        // Additional phone entries from phones JSON
+        if (Array.isArray(voter.phones) && voter.phones.length > 0) {
+            voter.phones.forEach(ph => {
+                if (ph.mapped_type === 'phone_number') return; // primary already shown
+                contactEl.innerHTML += `<div class="contact-row">📱 ${ph.value} <span class="text-muted">(${ph.source_column})</span></div>`;
+            });
+        }
+
+        // Districts
+        let distEl = document.getElementById('modal-districts-grid');
+        distEl.innerHTML = '';
+        let districts = voter.districts || {};
+        if (Object.keys(districts).length === 0) {
+            distEl.innerHTML = '<span class="text-muted">No district data mapped</span>';
+        } else {
+            Object.entries(districts).forEach(([k, v]) => {
+                distEl.innerHTML += `
+                    <div class="info-cell">
+                        <span class="info-label">${k}</span>
+                        <span class="info-value">${v}</span>
+                    </div>`;
+            });
+        }
+
+        // Voting history timeline
+        let histEl = document.getElementById('modal-history-timeline');
+        histEl.innerHTML = '';
+        let history = voter.voting_history || {};
+        let historyKeys = Object.keys(history).sort().reverse(); // newest first
+        if (historyKeys.length === 0) {
+            histEl.innerHTML = '<span class="text-muted">No voting history recorded</span>';
+        } else {
+            historyKeys.forEach(el => {
+                let val = history[el];
+                let voted = val && val !== '0' && val.toLowerCase() !== 'no' && val.toLowerCase() !== 'n';
+                histEl.innerHTML += `
+                    <div class="history-row ${voted ? 'voted' : 'not-voted'}">
+                        <span class="history-election">${el}</span>
+                        <span class="history-marker">${voted ? '✓' : '—'}</span>
+                        <span class="history-value">${val}</span>
+                    </div>`;
+            });
+        }
+
+        // Raw data (collapsible — reset to closed)
+        let rawEl = document.getElementById('modal-raw-data');
+        rawEl.style.display = 'none';
+        document.getElementById('modal-raw-toggle').innerText = '▶ Raw Data';
+        let rawData = voter.raw_data || {};
+        rawEl.innerHTML = '<table class="raw-table">' +
+            Object.entries(rawData).map(([k, v]) =>
+                `<tr><td class="raw-key">${escapeHtml(k)}</td><td class="raw-val">${escapeHtml(String(v || ''))}</td></tr>`
+            ).join('') +
+            '</table>';
+
+        // Show overlay
+        document.getElementById('voter-modal-overlay').style.display = 'flex';
+
+    }).catch(err => {
+        console.error('[modal] Error loading voter detail:', err);
+        alert('An error occurred loading the voter profile. Please try again.');
+    });
+}
+
+function closeModal() {
+    document.getElementById('voter-modal-overlay').style.display = 'none';
+}
+
+function closeModalOnBackdrop(event) {
+    if (event.target.id === 'voter-modal-overlay') closeModal();
+}
+
+function toggleRawData() {
+    let rawEl = document.getElementById('modal-raw-data');
+    let toggleEl = document.getElementById('modal-raw-toggle');
+    let isHidden = rawEl.style.display === 'none' || rawEl.style.display === '';
+    rawEl.style.display = isHidden ? 'block' : 'none';
+    toggleEl.innerText = (isHidden ? '▼' : '▶') + ' Raw Data';
+}
+
+// Escape HTML to prevent XSS in raw voter data display
+function escapeHtml(str) {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+// Escape key closes modal
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeModal();
+});
+
+// ============================================================
+// LISTS
+// ============================================================
+function saveAsList() {
+    let checked = Array.from(document.querySelectorAll('.row-select:checked')).map(cb => parseInt(cb.value));
+    if (checked.length === 0) { alert('No items selected'); return; }
+    let name = prompt('Enter a name for this list:');
+    if (!name) return;
+    window.pywebview.api.create_list(name, null, 1, checked).then(() => {
+        alert('List Created!');
+        loadLists();
+    });
+}
+
+function loadLists() {
+    window.pywebview.api.get_lists().then(lists => {
+        let ul = document.getElementById('saved-lists');
+        let filterList = document.getElementById('filter-list');
+        ul.innerHTML = '';
+        filterList.innerHTML = '<option value="">-- Any --</option>';
+        lists.forEach(l => {
+            let li = document.createElement('li');
+            li.innerText = l.name;
+            ul.appendChild(li);
+            filterList.innerHTML += `<option value="${l.id}">${l.name}</option>`;
+        });
+    });
+}
