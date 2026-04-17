@@ -183,7 +183,58 @@ class AppAPI:
         self._parties_cache = [r['party'] for r in results]
         return self._parties_cache
 
-    # ------------------------------------------------------------------
+    def get_district_options(self):
+        """
+        Return every district key present in the data, with sorted unique values.
+        Uses json_each() on the districts JSON column — same approach as get_elections().
+
+        Returns a list of dicts:
+          [{'key': 'CD', 'label': 'Congressional District (CD)', 'values': ['1','2',...]}, ...]
+
+        Keys with no data are omitted. Results are NOT cached (district data rarely
+        changes but we want fresh values after an import without a restart).
+        """
+        # Friendly labels for known district keys
+        LABELS = {
+            'CD':           'Congressional District (CD)',
+            'SD':           'State Senate District (SD)',
+            'HD':           'State House / Assembly (HD)',
+            'Supervisor':   'County Supervisor',
+            'CensusBlock':  'Census Block',
+        }
+
+        # Step 1: find all distinct district keys present in the database
+        keys_result = self.db.query(
+            "SELECT DISTINCT key FROM voters, json_each(districts) "
+            "WHERE key IS NOT NULL AND key != '' ORDER BY key ASC"
+        )
+        keys = [r['key'] for r in keys_result]
+
+        if not keys:
+            return []
+
+        # Step 2: for each key, get the sorted unique values
+        options = []
+        for key in keys:
+            vals_result = self.db.query(
+                "SELECT DISTINCT json_extract(districts, '$.' || ?) as val "
+                "FROM voters "
+                "WHERE json_extract(districts, '$.' || ?) IS NOT NULL "
+                "  AND json_extract(districts, '$.' || ?) != '' "
+                "ORDER BY val ASC",
+                (key, key, key)
+            )
+            values = [r['val'] for r in vals_result if r['val']]
+            if values:
+                options.append({
+                    'key':    key,
+                    'label':  LABELS.get(key, key),
+                    'values': values,
+                })
+
+        return options
+
+
     # Count (mirrors search_voters filter logic, returns int)
     # ------------------------------------------------------------------
     def count_voters(self, query=None, filters=None):

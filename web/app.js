@@ -69,6 +69,7 @@ window.addEventListener('pywebviewready', function () {
     loadElections();
     loadParties();
     loadTags();
+    loadDistrictFilters();
 });
 
 // ============================================================
@@ -110,6 +111,7 @@ function deleteFile(fileId, fileName) {
             loadElections();
             loadParties();
             loadTags();
+            loadDistrictFilters();   // district values may have changed
         } else {
             alert('Delete failed: ' + (result.message || 'Unknown error'));
         }
@@ -191,7 +193,9 @@ function startImport() {
             loadElections();
             loadParties();
             loadTags();
+            loadDistrictFilters();   // pick up any new district fields from this import
             switchTab('dashboard');
+
         } else {
             alert('Error during import: ' + res.message);
             document.getElementById('mapping-section').style.display = 'block';
@@ -523,8 +527,82 @@ function loadElections() {
 }
 
 // ============================================================
-// SEARCH
+// DISTRICT FILTERS — dynamic, built from data in DB
 // ============================================================
+function loadDistrictFilters() {
+    const container = document.getElementById('district-filters');
+    if (!container) return;
+
+    window.pywebview.api.get_district_options().then(options => {
+        container.innerHTML = '';
+
+        if (!options || options.length === 0) {
+            // No district data imported yet — show nothing
+            return;
+        }
+
+        options.forEach(opt => {
+            const key      = opt.key;           // e.g. 'CD'
+            const label    = opt.label;         // e.g. 'Congressional District (CD)'
+            const values   = opt.values || [];  // sorted unique values
+            const filterKey = `district_${key}`;
+
+            const group = document.createElement('div');
+            group.className = 'form-group';
+
+            const lbl = document.createElement('label');
+            lbl.textContent = label;
+            group.appendChild(lbl);
+
+            if (values.length <= 60) {
+                // Dropdown for manageable value sets
+                const sel = document.createElement('select');
+                sel.className = 'district-filter-select full-width';
+                sel.dataset.districtKey = filterKey;
+                sel.id = `filter-${filterKey}`;
+                sel.innerHTML = `<option value="">— Any —</option>`;
+                values.forEach(v => {
+                    sel.innerHTML += `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`;
+                });
+                sel.addEventListener('change', () => performSearch());
+                group.appendChild(sel);
+            } else {
+                // Text input for very large value sets (e.g. census block)
+                const inp = document.createElement('input');
+                inp.type = 'text';
+                inp.className = 'district-filter-text full-width';
+                inp.dataset.districtKey = filterKey;
+                inp.id = `filter-${filterKey}`;
+                inp.placeholder = `Filter ${label}…`;
+                inp.addEventListener('keyup', e => { if (e.key === 'Enter') performSearch(); });
+                group.appendChild(inp);
+
+                const hint = document.createElement('small');
+                hint.style.cssText = 'color:var(--text-muted); font-size:0.75em;';
+                hint.textContent = `${values.length} unique values — type to filter, press Enter`;
+                group.appendChild(hint);
+            }
+
+            container.appendChild(group);
+        });
+
+        // Clear-all pill at the bottom (only if filters exist)
+        if (options.length > 0) {
+            const clearRow = document.createElement('div');
+            clearRow.style.cssText = 'margin-bottom: 8px;';
+            clearRow.innerHTML = `<button class="btn-pill btn-pill-clear" onclick="clearDistrictFilters()">Clear Districts</button>`;
+            container.appendChild(clearRow);
+        }
+    });
+}
+
+function clearDistrictFilters() {
+    document.querySelectorAll('.district-filter-select').forEach(s => s.value = '');
+    document.querySelectorAll('.district-filter-text').forEach(i => i.value = '');
+    performSearch();
+}
+
+
 function performSearch(resetPage = true) {
     if (resetPage) currentPage = 0;
 
@@ -543,15 +621,22 @@ function performSearch(resetPage = true) {
     }
 
     lastFilters = {
-        city:          document.getElementById('filter-city').value,
-        party:         partiesSelected.length > 0 ? partiesSelected : null,
-        precinct:      document.getElementById('filter-precinct').value,
-        district_CD:   document.getElementById('filter-district_CD').value,
-        district_SD:   document.getElementById('filter-district_SD').value,
-        history_math:  historyMath,
-        has_tag:       document.getElementById('filter-tag').value || null,
-        in_list:       document.getElementById('filter-list').value
+        city:         document.getElementById('filter-city').value,
+        party:        partiesSelected.length > 0 ? partiesSelected : null,
+        precinct:     document.getElementById('filter-precinct').value,
+        history_math: historyMath,
+        has_tag:      document.getElementById('filter-tag').value || null,
+        in_list:      document.getElementById('filter-list').value
     };
+
+    // Collect every district dropdown that was rendered by loadDistrictFilters()
+    document.querySelectorAll('.district-filter-select').forEach(sel => {
+        if (sel.value) lastFilters[sel.dataset.districtKey] = sel.value;
+    });
+    // Also collect any free-text district inputs
+    document.querySelectorAll('.district-filter-text').forEach(inp => {
+        if (inp.value.trim()) lastFilters[inp.dataset.districtKey] = inp.value.trim();
+    });
 
     window.pywebview.api.count_voters(lastQuery, lastFilters).then(count => {
         totalCount = count;

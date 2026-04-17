@@ -172,17 +172,11 @@
                         <input type="text" id="filter-precinct" placeholder="Precinct ID">
                     </div>
 
-                    <div class="form-group">
-                        <label>Congressional District (CD)</label>
-                        <input type="text" id="filter-district_CD" placeholder="e.g. 12">
-                    </div>
-
-                    <div class="form-group">
-                        <label>State Senate (SD)</label>
-                        <input type="text" id="filter-district_SD" placeholder="e.g. 5">
-                    </div>
+                    <!-- Dynamic district filters — populated by loadDistrictFilters() after data load -->
+                    <div id="district-filters"></div>
 
                     <hr>
+
                     <h3>Voting History</h3>
 
                     <div class="form-group">
