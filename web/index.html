@@ -25,6 +25,10 @@
             </div>
             <div class="modal-body">
                 <div class="modal-section">
+                    <h4 class="modal-section-title">🏷️ Tags</h4>
+                    <div id="modal-tags-container"></div>
+                </div>
+                <div class="modal-section">
                     <h4 class="modal-section-title">📋 Contact &amp; Demographics</h4>
                     <div id="modal-contact-block"></div>
                 </div>
@@ -54,6 +58,29 @@
             <li id="tab-import" onclick="switchTab('import')">Import Data</li>
             <li id="tab-search" onclick="switchTab('search')">Search &amp; Lists</li>
         </ul>
+
+        <!-- Tag Manager -->
+        <div class="sidebar-section">
+            <div class="sidebar-section-header">
+                <span>🏷️ Tags</span>
+                <button class="btn-pill" style="padding: 2px 8px; font-size: 0.75em;" onclick="toggleCreateTagForm()">+ New</button>
+            </div>
+            <div id="create-tag-form" style="display:none; padding: 8px 0;">
+                <input type="text" id="new-tag-name" placeholder="Tag name" class="full-width" style="font-size: 0.85em; margin-bottom: 6px;" onkeyup="if(event.key==='Enter') createTag()">
+                <div class="color-swatches">
+                    <div class="color-swatch active" style="background:#3182ce" onclick="selectTagColor('#3182ce', this)"></div>
+                    <div class="color-swatch" style="background:#e53e3e" onclick="selectTagColor('#e53e3e', this)"></div>
+                    <div class="color-swatch" style="background:#38a169" onclick="selectTagColor('#38a169', this)"></div>
+                    <div class="color-swatch" style="background:#d69e2e" onclick="selectTagColor('#d69e2e', this)"></div>
+                    <div class="color-swatch" style="background:#805ad5" onclick="selectTagColor('#805ad5', this)"></div>
+                    <div class="color-swatch" style="background:#dd6b20" onclick="selectTagColor('#dd6b20', this)"></div>
+                    <div class="color-swatch" style="background:#319795" onclick="selectTagColor('#319795', this)"></div>
+                    <div class="color-swatch" style="background:#e91e8c" onclick="selectTagColor('#e91e8c', this)"></div>
+                </div>
+                <button class="btn primary" style="width: 100%; margin-top: 6px; font-size: 0.85em; padding: 6px;" onclick="createTag()">Create Tag</button>
+            </div>
+            <div id="tag-chips-list" class="tag-chips-list"></div>
+        </div>
         <div style="flex-grow: 1"></div>
         <div class="theme-toggle">
             <button onclick="toggleTheme()">☀️ Toggle Light/Dark</button>
@@ -171,6 +198,11 @@
                     </div>
 
                     <div class="form-group mt-2">
+                        <label>Has Tag</label>
+                        <select id="filter-tag" class="full-width"><option value="">-- Any --</option></select>
+                    </div>
+
+                    <div class="form-group mt-2">
                         <label>In List</label>
                         <select id="filter-list" class="full-width"><option value="">-- Any --</option></select>
                     </div>
@@ -186,8 +218,10 @@
                 <div class="search-results card">
                     <div class="results-header">
                         <h3 id="results-count">Results (0)</h3>
-                        <div style="display: flex; gap: 5px; align-items: center;">
-                            <button class="btn secondary" id="btn-save-list" onclick="saveAsList()">Save as Static List</button>
+                        <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
+                            <button class="btn secondary" id="btn-save-list" onclick="saveAsList()">Save as List</button>
+                            <select id="bulk-tag-select" style="max-width: 130px;"><option value="">-- Tag --</option></select>
+                            <button class="btn secondary" onclick="applyBulkTag()">Tag Selected</button>
                         </div>
                     </div>
                     <p class="text-muted" style="margin: 0 0 10px; font-size: 0.85em;">Click any row to view full voter profile.</p>

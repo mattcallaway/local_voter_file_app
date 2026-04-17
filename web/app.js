@@ -1,3 +1,6 @@
+// Global state
+let allTags = [];  // Tag cache — refreshed on load and after import/create/delete
+
 // ============================================================
 // THEME & TABS
 // ============================================================
@@ -59,6 +62,7 @@ window.addEventListener('pywebviewready', function () {
     loadLists();
     loadElections();
     loadParties();
+    loadTags();
 });
 
 // ============================================================
@@ -151,11 +155,162 @@ function startImport() {
             // Refresh cached lookup lists now that new data is in
             loadElections();
             loadParties();
+            loadTags();
             switchTab('dashboard');
         } else {
             alert('Error during import: ' + res.message);
             document.getElementById('mapping-section').style.display = 'block';
         }
+    });
+}
+
+// ============================================================
+// MODAL TAG MANAGEMENT
+// ============================================================
+function renderModalTags(voterId, tags) {
+    let container = document.getElementById('modal-tags-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    // Current tag chips
+    let chipsDiv = document.createElement('div');
+    chipsDiv.className = 'modal-tag-chips';
+    if (tags.length === 0) {
+        chipsDiv.innerHTML = '<span class="text-muted" style="font-size:0.85em">No tags applied</span>';
+    } else {
+        tags.forEach(t => {
+            chipsDiv.innerHTML += `
+                <span class="tag-chip-modal"
+                      style="background:${t.color}20; border-color:${t.color}80; color:${t.color}">
+                    ${escapeHtml(t.name)}
+                    <button class="tag-remove-btn" onclick="removeTagFromVoter(${voterId}, ${t.id})" title="Remove">×</button>
+                </span>`;
+        });
+    }
+    container.appendChild(chipsDiv);
+
+    // Add tag row — only show tags not already applied
+    let appliedIds = new Set(tags.map(t => t.id));
+    let available = allTags.filter(t => !appliedIds.has(t.id));
+    if (available.length > 0) {
+        let addRow = document.createElement('div');
+        addRow.className = 'modal-add-tag-row';
+        let opts = available.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+        addRow.innerHTML = `
+            <select id="modal-tag-add-select"><option value="">+ Add tag…</option>${opts}</select>
+            <button class="btn secondary" style="padding:5px 10px; font-size:0.85em;" onclick="addTagToVoter(${voterId})">Add</button>
+        `;
+        container.appendChild(addRow);
+    }
+}
+
+function addTagToVoter(voterId) {
+    let sel = document.getElementById('modal-tag-add-select');
+    let tagId = parseInt(sel.value);
+    if (!tagId) return;
+    window.pywebview.api.add_voter_tag(voterId, tagId).then(() => {
+        window.pywebview.api.get_voter_tags(voterId).then(tags => renderModalTags(voterId, tags));
+    });
+}
+
+function removeTagFromVoter(voterId, tagId) {
+    window.pywebview.api.remove_voter_tag(voterId, tagId).then(() => {
+        window.pywebview.api.get_voter_tags(voterId).then(tags => renderModalTags(voterId, tags));
+    });
+}
+
+// ============================================================
+// MODAL — close, backdrop, raw data toggle
+// ============================================================
+let selectedTagColor = '#3182ce';
+
+function loadTags() {
+    window.pywebview.api.get_tags().then(tags => {
+        allTags = tags;
+        renderTagManagerSidebar(tags);
+
+        // Populate bulk tag select
+        let bulkSel = document.getElementById('bulk-tag-select');
+        if (bulkSel) {
+            bulkSel.innerHTML = '<option value="">-- Tag --</option>';
+            tags.forEach(t => {
+                bulkSel.innerHTML += `<option value="${t.id}">${t.name}</option>`;
+            });
+        }
+
+        // Populate has_tag filter
+        let filterSel = document.getElementById('filter-tag');
+        if (filterSel) {
+            filterSel.innerHTML = '<option value="">-- Any --</option>';
+            tags.forEach(t => {
+                filterSel.innerHTML += `<option value="${t.id}">${t.name}</option>`;
+            });
+        }
+    });
+}
+
+function renderTagManagerSidebar(tags) {
+    let container = document.getElementById('tag-chips-list');
+    if (!container) return;
+    container.innerHTML = '';
+    if (tags.length === 0) {
+        container.innerHTML = '<span class="text-muted" style="font-size:0.82em">No tags yet — create one above</span>';
+        return;
+    }
+    tags.forEach(t => {
+        let chip = document.createElement('div');
+        chip.className = 'tag-chip';
+        chip.innerHTML = `
+            <span class="tag-dot" style="background:${t.color}"></span>
+            <span class="tag-name">${escapeHtml(t.name)}</span>
+            <button class="tag-delete" onclick="deleteTag(${t.id}, event)" title="Delete tag">×</button>
+        `;
+        container.appendChild(chip);
+    });
+}
+
+function toggleCreateTagForm() {
+    let form = document.getElementById('create-tag-form');
+    let isHidden = form.style.display === 'none' || form.style.display === '';
+    form.style.display = isHidden ? 'block' : 'none';
+    if (isHidden) document.getElementById('new-tag-name').focus();
+}
+
+function selectTagColor(color, el) {
+    selectedTagColor = color;
+    document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+    el.classList.add('active');
+}
+
+function createTag() {
+    let nameInput = document.getElementById('new-tag-name');
+    let name = nameInput.value.trim();
+    if (!name) { nameInput.focus(); return; }
+    window.pywebview.api.create_tag(name, selectedTagColor).then(result => {
+        if (result.status === 'success') {
+            nameInput.value = '';
+            document.getElementById('create-tag-form').style.display = 'none';
+            loadTags();
+        } else {
+            alert(result.message);
+        }
+    });
+}
+
+function deleteTag(tagId, event) {
+    event.stopPropagation();
+    if (!confirm('Delete this tag? It will be removed from all voters.')) return;
+    window.pywebview.api.delete_tag(tagId).then(() => loadTags());
+}
+
+function applyBulkTag() {
+    let checked = Array.from(document.querySelectorAll('.row-select:checked')).map(cb => parseInt(cb.value));
+    let tagId = parseInt(document.getElementById('bulk-tag-select').value);
+    if (checked.length === 0) { alert('No voters selected'); return; }
+    if (!tagId) { alert('Please select a tag first'); return; }
+    window.pywebview.api.bulk_add_tag(checked, tagId).then(r => {
+        let tagName = allTags.find(t => t.id === tagId)?.name || 'tag';
+        alert(`"${tagName}" applied to ${r.count} voter${r.count !== 1 ? 's' : ''}!`);
     });
 }
 
@@ -258,6 +413,7 @@ function performSearch(resetPage = true) {
         district_CD:   document.getElementById('filter-district_CD').value,
         district_SD:   document.getElementById('filter-district_SD').value,
         history_math:  historyMath,
+        has_tag:       document.getElementById('filter-tag').value || null,
         in_list:       document.getElementById('filter-list').value
     };
 
@@ -409,6 +565,9 @@ function openVoterModal(voterId) {
 
         // Show overlay
         document.getElementById('voter-modal-overlay').style.display = 'flex';
+
+        // Render tags (voter.tags comes pre-loaded from get_voter_detail)
+        renderModalTags(voter.id, voter.tags || []);
 
     }).catch(err => {
         console.error('[modal] Error loading voter detail:', err);

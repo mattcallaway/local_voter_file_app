@@ -96,6 +96,10 @@ class AppAPI:
                     conditions.append("v.id IN (SELECT voter_id FROM list_voters WHERE list_id = ?)")
                     args.append(val)
 
+                elif k == 'has_tag':
+                    conditions.append("v.id IN (SELECT voter_id FROM voter_tags WHERE tag_id = ?)")
+                    args.append(int(val))
+
                 elif k in ALLOWED_FILTER_COLS:
                     conditions.append(f"v.{k} LIKE ?")
                     args.append(f"%{val}%")
@@ -148,6 +152,8 @@ class AppAPI:
                     r[json_col] = {} if json_col != 'phones' else []
             else:
                 r[json_col] = {} if json_col != 'phones' else []
+        # Include current tags so modal can render them
+        r['tags'] = self.get_voter_tags(voter_id)
         return r
 
     # ------------------------------------------------------------------
@@ -195,7 +201,71 @@ class AppAPI:
         return result[0]['count'] if result else 0
 
     # ------------------------------------------------------------------
-    # Bulk operations
+    # Tag management
+    # ------------------------------------------------------------------
+    def get_tags(self):
+        """Return all tags ordered by name."""
+        return self.db.query("SELECT * FROM tags ORDER BY name ASC")
+
+    def create_tag(self, name, color='#3182ce'):
+        """Create a new tag. Returns the tag object or error on duplicate."""
+        name = name.strip()
+        if not name:
+            return {"status": "error", "message": "Tag name cannot be empty"}
+        try:
+            tag_id = self.db.execute(
+                "INSERT INTO tags (name, color) VALUES (?, ?)", (name, color)
+            )
+            return {"status": "success", "id": tag_id, "name": name, "color": color}
+        except sqlite3.IntegrityError:
+            return {"status": "error", "message": f"Tag '{name}' already exists"}
+
+    def delete_tag(self, tag_id):
+        """Delete a tag and remove it from all voters."""
+        self.db.execute("DELETE FROM voter_tags WHERE tag_id = ?", (tag_id,))
+        self.db.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
+        return {"status": "success"}
+
+    def get_voter_tags(self, voter_id):
+        """Return all tags applied to a specific voter."""
+        return self.db.query(
+            "SELECT t.* FROM tags t "
+            "JOIN voter_tags vt ON t.id = vt.tag_id "
+            "WHERE vt.voter_id = ? ORDER BY t.name",
+            (voter_id,)
+        )
+
+    def add_voter_tag(self, voter_id, tag_id):
+        """Apply a single tag to a single voter."""
+        try:
+            self.db.execute(
+                "INSERT OR IGNORE INTO voter_tags (voter_id, tag_id) VALUES (?, ?)",
+                (int(voter_id), int(tag_id))
+            )
+            return {"status": "success"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def remove_voter_tag(self, voter_id, tag_id):
+        """Remove a single tag from a single voter."""
+        self.db.execute(
+            "DELETE FROM voter_tags WHERE voter_id = ? AND tag_id = ?",
+            (int(voter_id), int(tag_id))
+        )
+        return {"status": "success"}
+
+    def bulk_add_tag(self, voter_ids, tag_id):
+        """Apply a tag to many voters at once."""
+        c = self.db.conn.cursor()
+        tups = [(int(v_id), int(tag_id)) for v_id in voter_ids]
+        c.executemany(
+            "INSERT OR IGNORE INTO voter_tags (voter_id, tag_id) VALUES (?, ?)", tups
+        )
+        self.db.conn.commit()
+        return {"status": "success", "count": len(tups)}
+
+    # ------------------------------------------------------------------
+    # Bulk custom data
     # ------------------------------------------------------------------
     def bulk_update_custom_data(self, voter_ids, key, value):
         c = self.db.conn.cursor()
