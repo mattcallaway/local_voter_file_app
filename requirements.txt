@@ -1,1 +1,3 @@
-pywebview==5.0.5
+pywebview[cocoa]==5.0.5; sys_platform == "darwin"
+pywebview[gtk]==5.0.5; sys_platform == "linux"
+pywebview==5.0.5; sys_platform == "win32"

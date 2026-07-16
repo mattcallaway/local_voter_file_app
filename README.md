@@ -19,48 +19,97 @@ Here are the core features:
 
 ## 🛠️ How to Install and Run (For Beginners)
 
-This section will walk you through exactly how to get the application running on your Windows computer for the first time.
+This app is cross-platform and runs on **Windows, macOS, and Linux**. 
 
-### Step 1: Install Python
-If you don't already have Python installed, you'll need it to run the backend of the app!
-1. Go to [Python.org](https://www.python.org/downloads/) and click the big yellow button to download the latest Windows installer.
-2. Open the downloaded file.
-3. 🛑 **CRITICAL STEP:** At the very bottom of the installation window, check the box that says **"Add python.exe to PATH"**.
-4. Click "Install Now" and wait for it to finish.
+### Quick Start (Automated Scripts)
+We provide automated launchers that will check for Python, set up a local virtual environment (`.venv`), install all requirements, and start the app for you.
 
-### Step 2: Download the Application
-1. Download this entire folder (if you are on GitHub, click the green "Code" button and select "Download ZIP").
-2. Extract/Unzip the folder somewhere on your computer (like your Documents or Desktop).
-
-### Step 3: Run the Setup
-1. Open up the **Command Prompt** on Windows (Press the Windows Key, type `cmd`, and press Enter).
-2. "Change Directory" into the folder where you saved the app by typing `cd` followed by a space, and then the path to the folder. *(Pro-tip: You can type `cd `, and then drag and drop the application folder directly into the black box!)*. Press Enter.
-3. Install the required modules by typing this exactly and pressing Enter:
-   ```bash
-   pip install -r requirements.txt
-   ```
-   *Wait a minute for the computer to download the background pieces.*
-
-### Step 4: Open the App
-Whenever you want to run the app, just open your command prompt in this folder and type:
-   ```bash
-   python main.py
-   ```
-**That's it!** A beautiful desktop window will instantly pop open and you can begin importing your files!
+*   **Windows**: Double-click the file [run.bat](file:///c:/Users/Mathew%20C/OneDrive/Documents/VoterData_Offline/run.bat) (or run `run.bat` in Command Prompt).
+*   **macOS & Linux**: Open your Terminal in this directory, make the launcher executable, and run it:
+    ```bash
+    chmod +x run.sh
+    ./run.sh
+    ```
 
 ---
 
-## 📦 How to Package it as a `.exe` (For Advanced Users)
+### Manual Setup (Step-by-Step)
 
-If you are a campaign manager and want to email this program as a single double-clickable `.exe` file to a volunteer so they don't have to install Python, you can "bundle" it easily!
+If you prefer to set up the application manually:
 
-1. Open your command prompt in the app folder.
-2. Install the PyInstaller bundling tool:
-   ```bash
-   pip install pyinstaller
-   ```
-3. Run the packager command:
-   ```bash
-   pyinstaller --noconsole --onefile --add-data "web;web" main.py
-   ```
-4. Once it finishes, look inside the newly created `dist` folder. You will find `main.exe` (you can rename it to `CivicData.exe`). You can move this single file anywhere, put it on a flash drive, and send it to friends!
+#### Step 1: Install Python
+Ensure Python 3.8+ is installed on your system:
+*   **Windows**: Download the installer from [Python.org](https://www.python.org/downloads/). **CRITICAL:** Check the box **"Add python.exe to PATH"** before clicking install.
+*   **macOS**: Install Python via [Python.org](https://www.python.org/downloads/) or via Homebrew (`brew install python`).
+*   **Linux**: Install Python and virtual environment headers using your package manager (e.g. `sudo apt install python3 python3-venv python3-pip`).
+
+#### Step 2: Install System Dependencies (Linux Only)
+`pywebview` requires native system webview libraries on Linux.
+*   **Ubuntu / Debian / Mint**:
+    ```bash
+    sudo apt update
+    sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1
+    ```
+    *(Note: If `gir1.2-webkit2-4.1` is not available, use `gir1.2-webkit2-4.0` instead)*
+*   **Fedora / RedHat**:
+    ```bash
+    sudo dnf install python3-gobject gtk3 webkit2gtk4.0
+    ```
+*   **Arch Linux**:
+    ```bash
+    sudo pacman -S python-gobject gtk3 webkit2gtk
+    ```
+
+#### Step 3: Set Up a Virtual Environment & Install Requirements
+Create a virtual environment to isolate project packages, then install dependencies:
+```bash
+# Create a virtual environment
+python -m venv .venv
+
+# Activate it (Windows)
+.venv\Scripts\activate
+
+# Activate it (macOS/Linux)
+source .venv/bin/activate
+
+# Install requirements
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+#### Step 4: Run the App
+```bash
+python main.py
+```
+
+---
+
+## 📦 Packaging Standalone Executables (For Advanced Users)
+
+If you want to bundle CivicData into a single, double-clickable app that runs without needing Python installed, you can build it using `pyinstaller`.
+
+First, activate your virtual environment and install PyInstaller:
+```bash
+pip install pyinstaller
+```
+
+Then run the package command for your operating system:
+
+*   **Windows (creates `.exe`)**:
+    ```bash
+    pyinstaller --noconsole --onefile --add-data "web;web" main.py
+    ```
+*   **macOS (creates a standalone `.app` bundle)**:
+    ```bash
+    pyinstaller --noconsole --windowed --add-data "web:web" main.py
+    ```
+*   **Linux (creates a standalone binary)**:
+    ```bash
+    pyinstaller --noconsole --onefile --add-data "web:web" main.py
+    ```
+
+> [!IMPORTANT]
+> Note the syntax difference in the `--add-data` parameter: Windows uses a semicolon `;` as a separator, while macOS and Linux use a colon `:`.
+
+Once finished, your standalone executable will be generated inside the newly created `dist/` directory.
+
